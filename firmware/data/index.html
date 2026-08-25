@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 Tester</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="linkBar" class="link-bar idle" role="status" aria-live="polite">
+    <span id="linkDot" class="link-dot" aria-hidden="true"></span>
+    <span id="linkText">Не подключено</span>
+    <span id="linkMeta" class="link-meta"></span>
+  </div>
+  <main>
+    <h1>ESP32 Tester</h1>
+
+    <section class="card">
+      <div class="conn-head">
+        <h2>Подключение</h2>
+        <button id="btnWifiSettings" type="button" class="btn-secondary btn-compact">WiFi</button>
+      </div>
+      <label>IP ESP32 <input id="host" type="text" value="192.168.4.1"></label>
+      <button id="btnConnect">Подключиться</button>
+      <p id="connStatus" class="status">Не подключено</p>
+      <p id="wifiLanHint" class="lan-hint" hidden></p>
+      <p id="uptime" class="muted"></p>
+    </section>
+
+    <section class="card">
+      <h2>GPIO</h2>
+      <label>Pin
+        <select id="gpioPin"></select>
+      </label>
+      <label class="row">
+        <span>Состояние</span>
+        <input id="gpioState" type="checkbox">
+        <span id="gpioStateLabel">OFF</span>
+      </label>
+      <div class="btn-row">
+        <button id="btnGpioApply">Применить</button>
+        <button id="btnGpioTap" type="button" class="btn-secondary">Тапнуть</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Servo</h2>
+      <label>Pin
+        <select id="servoPin"></select>
+      </label>
+      <label>Угол: <span id="angleValue">90</span>°
+        <input id="servoAngle" type="range" min="0" max="180" value="90">
+      </label>
+      <label class="row">
+        <span>Авто 0↔180 (5 сек)</span>
+        <input id="servoAuto" type="checkbox">
+      </label>
+      <button id="btnServoApply">Применить</button>
+      <p id="servoStatus" class="muted"></p>
+    </section>
+
+    <section class="card">
+      <h2>Датчики</h2>
+      <div class="sensor-grid">
+        <div id="sensorO2" class="sensor-tile">
+          <div class="sensor-tile-head">
+            <div class="sensor-title">O₂ (ADS1115)</div>
+            <button type="button" class="btn-trend" data-src="o2">Тренд</button>
+          </div>
+          <div class="sensor-value">—</div>
+        </div>
+        <div id="sensorFlow" class="sensor-tile">
+          <div class="sensor-tile-head">
+            <div class="sensor-title">Поток SFM3300</div>
+            <button type="button" class="btn-trend" data-src="flow">Тренд</button>
+          </div>
+          <div id="flowPhase" class="flow-phase idle" aria-live="polite">—</div>
+          <div class="sensor-value">—</div>
+          <button id="btnFlowReset" type="button" class="btn-secondary btn-compact">Сбросить объём</button>
+        </div>
+        <div id="sensorPressure" class="sensor-tile">
+          <div class="sensor-tile-head">
+            <div class="sensor-title">Давление DPS310</div>
+            <button type="button" class="btn-trend" data-src="pressure">Тренд</button>
+          </div>
+          <div class="sensor-value">—</div>
+        </div>
+        <div id="sensorCo2" class="sensor-tile">
+          <div class="sensor-tile-head">
+            <div class="sensor-title">CO₂ SCD41</div>
+            <button type="button" class="btn-trend" data-src="co2">Тренд</button>
+          </div>
+          <div class="sensor-value">—</div>
+        </div>
+        <div id="sensorWellue" class="sensor-tile">
+          <div class="sensor-tile-head">
+            <div class="sensor-title">Wellue Ring O2 S</div>
+            <button type="button" class="btn-trend" data-src="wellue">Тренд</button>
+          </div>
+          <div class="sensor-value">—</div>
+        </div>
+        <div id="sensorCoospo" class="sensor-tile">
+          <div class="sensor-tile-head">
+            <div class="sensor-title" id="hrBeltTitle">Нагрудный HR</div>
+            <div class="trend-btn-group">
+              <button type="button" class="btn-trend" data-src="hr">ЧСС</button>
+              <button type="button" class="btn-trend" data-src="rr">R-R</button>
+            </div>
+          </div>
+          <div class="sensor-value">—</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="trendsSection">
+      <div class="trends-head">
+        <h2>Тренды</h2>
+        <div class="window-pills" role="group" aria-label="Окно графика">
+          <button type="button" class="window-pill" data-window="120">2 мин</button>
+          <button type="button" class="window-pill active" data-window="300">5 мин</button>
+          <button type="button" class="window-pill" data-window="600">10 мин</button>
+          <button type="button" class="window-pill" data-window="3600">60 мин</button>
+        </div>
+      </div>
+      <p class="muted" id="trendsHint">Включите «Тренд» на плитке датчика — набор хранится на ESP32</p>
+      <div class="chart-stack" id="chartStack">
+        <article class="chart-panel" id="panelO2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">O₂</span>
+            <span class="chart-now" id="chartO2Now">—</span>
+          </div>
+          <canvas id="chartO2"></canvas>
+        </article>
+        <article class="chart-panel" id="panelFlow" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Поток</span>
+            <span class="chart-now" id="chartFlowNow">—</span>
+          </div>
+          <canvas id="chartFlow"></canvas>
+        </article>
+        <article class="chart-panel" id="panelPressure" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Давление</span>
+            <span class="chart-now" id="chartPressureNow">—</span>
+          </div>
+          <canvas id="chartPressure"></canvas>
+        </article>
+        <article class="chart-panel" id="panelCo2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">CO₂</span>
+            <span class="chart-now" id="chartCo2Now">—</span>
+          </div>
+          <canvas id="chartCo2"></canvas>
+        </article>
+        <article class="chart-panel" id="panelSpo2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">SpO₂</span>
+            <span class="chart-now" id="chartSpo2Now">—</span>
+          </div>
+          <canvas id="chartSpo2"></canvas>
+        </article>
+        <article class="chart-panel" id="panelHr" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">ЧСС</span>
+            <span class="chart-legend">
+              <label class="chart-src" id="hrLegendBeltWrap" hidden>
+                <input type="checkbox" id="hrViewBelt" checked>
+                <span class="swatch swatch-coospo"></span>
+                <span id="hrLegendBelt">Нагрудный HR</span>
+              </label>
+              <label class="chart-src" id="hrLegendWellueWrap" hidden>
+                <input type="checkbox" id="hrViewWellue" checked>
+                <span class="swatch swatch-wellue"></span>
+                <span id="hrLegendWellue">Wellue</span>
+              </label>
+            </span>
+            <span class="chart-now" id="chartHrNow">—</span>
+          </div>
+          <canvas id="chartHr"></canvas>
+        </article>
+        <article class="chart-panel" id="panelRr" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">R-R</span>
+            <span class="chart-now" id="chartRrNow">—</span>
+          </div>
+          <canvas id="chartRr"></canvas>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div id="wifiModal" class="modal" hidden aria-hidden="true">
+    <div class="modal-backdrop" id="wifiModalBackdrop"></div>
+    <div class="modal-panel card" role="dialog" aria-labelledby="wifiModalTitle">
+      <div class="modal-head">
+        <h2 id="wifiModalTitle">WiFi</h2>
+        <button type="button" id="btnWifiClose" class="btn-secondary btn-compact">Закрыть</button>
+      </div>
+      <p id="wifiModalStatus" class="muted">—</p>
+      <p class="muted wifi-hint">SSID можно ввести вручную — скан не обязателен. При скане AP может на 5–10 с моргнуть, не закрывайте страницу.</p>
+      <label>Имя сети (SSID)
+        <input id="wifiSsidManual" type="text" autocomplete="off" placeholder="вручную или выберите из списка">
+      </label>
+      <label>Пароль (для открытой сети — пусто)
+        <input id="wifiPassword" type="password" autocomplete="off">
+      </label>
+      <button type="button" id="btnWifiScan">Сканировать сети</button>
+      <p id="wifiScanStatus" class="muted"></p>
+      <ul id="wifiNetworkList" class="wifi-list"></ul>
+      <div class="btn-row">
+        <button type="button" id="btnWifiSave" disabled>Сохранить и перезагрузить</button>
+        <button type="button" id="btnWifiForget" class="btn-secondary">Забыть сеть</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
