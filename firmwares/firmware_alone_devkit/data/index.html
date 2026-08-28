@@ -134,6 +134,7 @@
               <div class="trend-btn-group">
                 <button type="button" class="btn-trend" data-src="hr">ЧСС</button>
                 <button type="button" class="btn-trend" data-src="rr">R-R</button>
+                <button type="button" class="btn-trend btn-hrv" id="btnHrvMeasure" disabled>Замерить HRV</button>
               </div>
             </div>
             <div class="sensor-value">—</div>
@@ -142,27 +143,14 @@
       </div>
     </section>
 
-    <section class="card" id="actionsSection">
-      <h2>Действия</h2>
-      <div class="btn-row actions-row">
-        <button type="button" id="btnHrvMeasure" disabled>Замерить HRV</button>
-        <button type="button" id="btnCpMeasure">Замер КП Бутейко</button>
-      </div>
-      <p class="muted" id="actionsHint"></p>
-    </section>
-
     <section class="card" id="trendsSection">
       <div class="trends-head">
         <h2>Тренды</h2>
-        <div class="trends-actions">
-          <div class="window-pills" role="group" aria-label="Окно графика">
-            <button type="button" class="window-pill" data-window="120">2 мин</button>
-            <button type="button" class="window-pill active" data-window="300">5 мин</button>
-            <button type="button" class="window-pill" data-window="600">10 мин</button>
-            <button type="button" class="window-pill" data-window="3600">60 мин</button>
-            <button type="button" class="window-pill" data-window="4500">75 мин</button>
-          </div>
-          <button type="button" id="btnTrendsSave" class="btn-secondary btn-compact" disabled>Сохранить</button>
+        <div class="window-pills" role="group" aria-label="Окно графика">
+          <button type="button" class="window-pill" data-window="120">2 мин</button>
+          <button type="button" class="window-pill active" data-window="300">5 мин</button>
+          <button type="button" class="window-pill" data-window="600">10 мин</button>
+          <button type="button" class="window-pill" data-window="3600">60 мин</button>
         </div>
       </div>
       <p class="muted" id="trendsHint">Включите «Тренд» на плитке датчика — набор хранится на ESP32</p>
@@ -267,46 +255,6 @@
       <div class="btn-row">
         <button type="button" id="btnWifiSave" disabled>Сохранить и перезагрузить</button>
         <button type="button" id="btnWifiForget" class="btn-secondary">Забыть сеть</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="cpModal" class="modal" hidden aria-hidden="true">
-    <div class="modal-backdrop" id="cpModalBackdrop"></div>
-    <div class="modal-panel card cp-panel" role="dialog" aria-labelledby="cpModalTitle">
-      <div class="modal-head">
-        <h2 id="cpModalTitle">Замер КП Бутейко</h2>
-        <button type="button" id="btnCpClose" class="btn-secondary btn-compact">Закрыть</button>
-      </div>
-      <p id="cpTimer" class="cp-timer">КП 0 сек</p>
-      <p id="cpStatus" class="muted">—</p>
-      <article class="chart-panel" id="cpPanelSpo2">
-        <div class="chart-meta">
-          <span class="chart-title">SpO₂</span>
-          <span class="chart-now" id="cpSpo2Now">—</span>
-        </div>
-        <canvas id="cpChartSpo2"></canvas>
-      </article>
-      <article class="chart-panel" id="cpPanelHr">
-        <div class="chart-meta">
-          <span class="chart-title">ЧСС</span>
-          <span class="chart-legend">
-            <span class="chart-src plain">
-              <span class="swatch swatch-coospo"></span>
-              <span>Нагрудный</span>
-            </span>
-            <span class="chart-src plain">
-              <span class="swatch swatch-wellue"></span>
-              <span>Wellue</span>
-            </span>
-          </span>
-          <span class="chart-now" id="cpHrNow">—</span>
-        </div>
-        <canvas id="cpChartHr"></canvas>
-      </article>
-      <div class="btn-row cp-actions">
-        <button type="button" id="btnCpFinish">Завершить</button>
-        <button type="button" id="btnCpSave" class="btn-secondary">Сохранить PNG</button>
       </div>
     </div>
   </div>

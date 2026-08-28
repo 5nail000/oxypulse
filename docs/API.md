@@ -1,6 +1,6 @@
-# HTTP / BLE API
+# HTTP API
 
-Единый источник истины для [`firmware/`](../firmware/), [`web/`](../web/) и [`android/`](../android/).
+Единый источник истины для [`firmwares/firmware_main_devkit/`](../firmwares/firmware_main_devkit/), [`web/`](../web/) и [`android/`](../android/).
 
 Распиновка — [`HARDWARE.md`](HARDWARE.md).
 
@@ -8,11 +8,12 @@
 
 | Канал | Когда использовать |
 |---|---|
-| **HTTP** (WiFi AP `192.168.4.1` или STA IP) | **Основной:** веб-UI |
-| **BLE GATT** (имя `ESP32-Tester`) | Android (низкий приоритет); тот же JSON |
+| **HTTP** (WiFi AP `192.168.4.1` или STA IP главного узла) | **Основной:** веб-UI и Android |
+| **BLE GATT** | Только монолит [`firmware_alone_devkit/`](../firmwares/firmware_alone_devkit/) (имя `ESP32-Tester`). На сплите GATT нет |
 
-Web Bluetooth в браузере **не используется** (HTTP AP без HTTPS). Wellue и COOSPO
-подключает **ESP32** как BLE-central; клиент читает `/api/status`.
+Web Bluetooth в браузере **не используется**. Wellue и COOSPO подключает **BLE-узел** (`firmwares/firmware_ble_s3` или `firmware_ble_devkit`); клиент читает `/api/status` с DevKit.
+
+UART между платами — внутренний NDJSON, не HTTP.
 
 ---
 
@@ -24,7 +25,7 @@ Web Bluetooth в браузере **не используется** (HTTP AP б�
 | STATUS (Read + Notify) | `a1b2c3d4-e5f6-7890-abcd-ef1234567891` |
 | CMD (Write) | `a1b2c3d4-e5f6-7890-abcd-ef1234567892` |
 
-STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`.
+STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`. На сплите этот GATT **не поднимается**.
 
 ---
 
@@ -34,13 +35,16 @@ STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`.
 |---|---|---|
 | GET | `/api/status` | Полное состояние (JSON) |
 | POST | `/api/cmd` | GPIO/Servo/flow_reset |
-| POST | `/api/wifi/scan` | Запуск async-скана WiFi |
-| GET | `/api/wifi/scan` | `{scanning, networks:[{ssid,rssi,secure}]}` |
+| POST | `/api/wifi/scan` | Запуск скана WiFi (фоновая задача на ESP32, ~до 12 с) |
+| GET | `/api/wifi/scan` | `{scanning, networks:[{ssid,rssi,secure,channel}], error?}` |
 | POST | `/api/wifi/config` | STA credentials или `{"clear":true}` |
 | GET | `/api/trends` | Страница истории (`?offset=0&limit=240`, max 300) |
 | POST | `/api/trends/sources` | Включение каналов трендов |
+| POST | `/api/hrv/start` | Старт записи R-R (`{"duration_sec":30\|120\|180\|300}`) |
+| POST | `/api/hrv/stop` | Отмена HRV-сессии |
+| GET | `/api/hrv` | Статус сессии; массив `rr` только в `done` |
 
-Статика UI: `/`, `/app.js`, `/style.css` (LittleFS в `firmware/data/`).
+Статика UI: `/`, `/app.js`, `/style.css` (LittleFS из [`web/`](../web/), прошивка [`firmwares/firmware_main_devkit/`](../firmwares/firmware_main_devkit/)).
 
 ---
 
@@ -53,11 +57,28 @@ STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`.
 | `gpio` | array | `[{pin, state: 0\|1}]` |
 | `servos` | array | `[{pin, angle, auto}]` |
 | `whitelist` | array | Разрешённые GPIO |
-| `sensors` | object | I2C + BLE central |
-| `wifi` | object | AP + STA |
-| `trends` | object | `sources` — маска каналов |
+| `sensors` | object | I2C + BLE. Группы `hypoxia` / `working` + плоские алиасы |
 
-### `sensors.o2`
+Корневые `sensors.o2` / `sensors.pressure` — **буфер гипоксии**.  
+`sensors.flow` / `sensors.co2` — **рабочий контур** (дублируются в `sensors.working`).
+
+### `sensors.hypoxia`
+
+| Поле | Содержимое |
+|---|---|
+| `o2` | как `sensors.o2`: `ok`, `percent`, `mv` |
+| `pressure` | как `sensors.pressure`: `ok`, `hpa`, `temp_c` |
+
+### `sensors.working`
+
+| Поле | Содержимое |
+|---|---|
+| `o2` | O₂ рабочего контура (`ok`, `percent`, `mv`) |
+| `pressure` | DPS310 рабочего контура |
+| `flow` | SFM3300 |
+| `co2` | SCD41 |
+
+### `sensors.o2` (алиас гипоксии)
 
 | Поле | Тип |
 |---|---|
@@ -112,9 +133,18 @@ STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`.
 | `rr_ms` | int (если ремень отдаёт) |
 | `error` | string |
 
+### `sensors.bridge`
+
+UART к BLE-узлу (только сплит `firmware_main_devkit`). Веб может игнорировать поле.
+
+| Поле | Тип |
+|---|---|
+| `ok` | bool — недавно была строка с S3 |
+| `error` | string, `"uart"` если мост молчит |
+
 ### `trends.sources`
 
-Булевы: `o2`, `flow`, `pressure`, `co2`, `wellue`, `hr`, `rr`.
+Булевы: `o2` (гипоксия), `pressure` (гипоксия), `flow`, `co2`, `work_o2`, `work_pressure`, `wellue`, `hr`, `rr`.
 
 ---
 
@@ -125,12 +155,12 @@ STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`.
 {"cmd":"gpio_set","pin":26,"state":1}
 {"cmd":"gpio_tap","pin":26}
 {"cmd":"gpio_tap","pin":26,"pulse_ms":3000}
-{"cmd":"servo_set","pin":18,"angle":90}
-{"cmd":"servo_auto","pin":18,"enabled":true,"pause_ms":5000}
+{"cmd":"servo_set","pin":25,"angle":90}
+{"cmd":"servo_auto","pin":25,"enabled":true,"pause_ms":5000}
 {"cmd":"flow_reset"}
 ```
 
-`pin` ∈ `whitelist`. Пины **22/23** — I2C, не GPIO.
+`pin` ∈ `whitelist`. Не использовать как GPIO: **22/23** (гипоксия), **18/19** (рабочий), **16/17** (UART-мост).
 
 Включение трендов — **`POST /api/trends/sources`**:
 
@@ -142,24 +172,50 @@ STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`.
 
 ## Тренды
 
-- 1 Гц, ~30 мин RAM; reboot обнуляет точки
+- 1 Гц, ~75 мин RAM (кольцо 4500 точек в heap на DevKit); reboot обнуляет точки
 - `GET /api/trends?offset=&limit=` — постранично (max 300)
+- Массив `flow` в JSON трендов — **среднее VE за 30 с** (`ve_lpm`, л/мин), не мгновенный `slm`
+
+---
+
+## HRV (`/api/hrv`)
+
+Краткосрочный замер по **всем** R-R с нагрудного ремня (не 1 Гц тренд). Длительность: **30 / 120 / 180 / 300** с (30 с — для отладки связи).
+
+Старт:
+
+```json
+{"duration_sec":30}
+```
+
+Ошибки старта: `belt_not_connected`, `busy`, `invalid_duration`. Повторный `start` сбрасывает предыдущую сессию.
+
+`GET /api/hrv`:
+
+| Поле | Когда |
+|---|---|
+| `state` | `idle` \| `recording` \| `done` \| `error` |
+| `duration_sec`, `elapsed_ms`, `rr_count` | всегда |
+| `error` | `state=error` (например «ремень отключён») |
+| `rr` | только `state=done` — массив интервалов в мс |
+
+Клиент считает SDNN, rMSSD, pNN50, SD1/SD2 и рисует Poincaré. Минимум **15** интервалов после фильтрации артефактов. Краткий обрыв BLE до **10 с** не прерывает запись.
 
 ---
 
 ## BLE central
 
-Константы в `firmware/src/config.h`:
+Константы в `firmwares/firmware_ble_s3/src/config.h` (или `firmware_ble_devkit`). Данные приходят на main по UART.
 
 | Устройство | Протокол |
 |---|---|
 | Wellue Ring O2 S | OxyII `e8fb0001-…` |
 | COOSPO H6M | Heart Rate 0x180D / 0x2A37 |
 
-**Init:** NimBLE до WiFi; WiFi+BLE — `WIFI_PS_MIN_MODEM`.
+WiFi только на главном узле; на S3 WiFi выключен.
 
 ---
 
 ## Калибровка
 
-Константы в `firmware/src/config.h` — порядок в [`firmware/README.md`](../firmware/README.md).
+Константы в `firmwares/firmware_main_devkit/src/config.h` — порядок в [`firmwares/firmware_main_devkit/README.md`](../firmwares/firmware_main_devkit/README.md).

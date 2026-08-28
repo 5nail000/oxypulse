@@ -1,17 +1,17 @@
 # OxyPulse — Android
 
-Compose-приложение для прошивки [`firmware/`](../firmware/).
+Compose-приложение для HTTP API главного узла [`firmware_main_devkit/`](../firmwares/firmware_main_devkit/).
 
 > **Приоритет на текущем этапе — последний.** Основная работа в
-> [`firmware/`](../firmware/) + [`web/`](../web/). Android дублирует часть
-> возможностей (GPIO/Servo, Wellue/COOSPO); I2C-метрики — пока только в веб-UI.
+> [`firmware_main_devkit/`](../firmwares/firmware_main_devkit/) + [`firmware_ble_s3/`](../firmwares/firmware_ble_s3/) (или [`firmware_ble_devkit/`](../firmwares/firmware_ble_devkit/)) + [`web/`](../web/).
+> На сплите используйте **WiFi HTTP**. BLE GATT есть только у монолита [`firmware_alone_devkit/`](../firmwares/firmware_alone_devkit/).
 
 API — [`docs/API.md`](../docs/API.md).
 
 ## Возможности
 
 - **WiFi**: HTTP к AP `192.168.4.1` или STA IP ESP32
-- **BLE**: скан `ESP32-Tester`, GATT STATUS + CMD (тот же JSON)
+- **BLE**: GATT `ESP32-Tester` — **только** [`firmware_alone_devkit/`](../firmwares/firmware_alone_devkit/); на сплите — WiFi
 - Диалоги **GPIO** (ON/OFF, tap 3 с) и **Servo** (угол, авто 0↔180)
 - **Wellue Ring O2 S** и **COOSPO H6M** из JSON (ESP32 подключается сам)
 
@@ -77,6 +77,6 @@ Kotlin, Jetpack Compose, Hilt, blessed-kotlin, OkHttp.
 | Документ | Содержание |
 |---|---|
 | [`docs/API.md`](../docs/API.md) | JSON, endpoints |
-| [`firmware/README.md`](../firmware/README.md) | Прошивка, калибровки |
+| [`firmware_main_devkit/README.md`](../firmwares/firmware_main_devkit/README.md) | Главный узел, калибровки |
 | [`docs/HARDWARE.md`](../docs/HARDWARE.md) | Распиновка, датчики, питание |
 | [`web/README.md`](../web/README.md) | Веб-UI, тренды |

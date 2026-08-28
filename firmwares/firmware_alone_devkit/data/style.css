@@ -101,13 +101,6 @@ button:hover { background: #1d4ed8; }
   flex-wrap: wrap;
 }
 .btn-row button { flex: 1; min-width: 120px; }
-.actions-row {
-  margin-top: 4px;
-}
-#actionsHint {
-  min-height: 1.2em;
-  margin: 8px 0 0;
-}
 button.btn-secondary {
   background: #374151;
 }
@@ -350,12 +343,6 @@ button.btn-secondary:disabled:hover { background: #374151; }
 .trends-head h2 {
   margin: 0;
 }
-.trends-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
 .window-pills {
   display: flex;
   gap: 6px;
@@ -374,18 +361,6 @@ button.btn-secondary:disabled:hover { background: #374151; }
   color: #fff;
 }
 .window-pill.active:hover { background: #1d4ed8; }
-.window-pill:disabled,
-.window-pill:disabled:hover {
-  opacity: 0.45;
-  cursor: not-allowed;
-  background: #222;
-}
-.window-pill.active:disabled,
-.window-pill.active:disabled:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
-}
 .chart-stack {
   display: flex;
   flex-direction: column;
@@ -580,25 +555,4 @@ button.btn-secondary:disabled:hover { background: #374151; }
 }
 .hrv-comment::placeholder {
   color: #666;
-}
-
-.cp-panel {
-  max-width: 560px;
-  width: min(560px, calc(100vw - 32px));
-}
-.cp-timer {
-  font-size: 1.8rem;
-  font-weight: 700;
-  text-align: center;
-  margin: 4px 0 8px;
-  font-variant-numeric: tabular-nums;
-}
-.cp-panel .chart-panel {
-  margin-top: 10px;
-}
-.cp-panel .chart-panel canvas {
-  height: 120px;
-}
-.cp-actions {
-  margin-top: 14px;
 }

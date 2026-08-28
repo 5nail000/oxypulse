@@ -3,23 +3,14 @@ const DEFAULT_PINS = [13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33];
 const POLL_MS = 1000;
 const FETCH_TIMEOUT_MS = 4000;
 const WIFI_SCAN_POLL_MS = 800;
-const WIFI_SCAN_MAX_POLLS = 24;
-const WIFI_SCAN_FETCH_TIMEOUT_MS = 8000;
+const WIFI_SCAN_MAX_POLLS = 20;
 const STALE_AFTER_MS = 3000;
 const GPIO_TAP_PULSE_MS = 250;
 const GPIO_TAP_COOLDOWN_MS = 6000;
-const CHART_MAX_SEC = 4500;
+const CHART_MAX_SEC = 1800;
 const TRENDS_FETCH_TIMEOUT_MS = 5000;
 const TRENDS_PAGE = 240;
-const TRENDS_HYDRATE_MAX_PAGES = 32;
 const TRENDS_HYDRATE_GAP_MS = 20000;
-const TREND_EXPORT_W = 960;
-const TREND_EXPORT_PAD = 16;
-const TREND_EXPORT_PLOT_H = 148;
-const CP_WINDOW_INITIAL_SEC = 60;
-const CP_WINDOW_EXPAND_SEC = 15;
-const CP_EXPAND_LEAD_SEC = 5;
-const CP_AFTERGLOW_SEC = 45;
 const HR_VIEW_BELT_KEY = 'oxypulse.hrView.belt';
 const HR_VIEW_WELLUE_KEY = 'oxypulse.hrView.wellue';
 const CHART_PAD = { top: 8, right: 8, bottom: 22, left: 42 };
@@ -43,7 +34,6 @@ const btnGpioTap = document.getElementById('btnGpioTap');
 const btnServoApply = document.getElementById('btnServoApply');
 const btnFlowReset = document.getElementById('btnFlowReset');
 const trendsHint = document.getElementById('trendsHint');
-const btnTrendsSave = document.getElementById('btnTrendsSave');
 const chartO2 = document.getElementById('chartO2');
 const chartWorkO2 = document.getElementById('chartWorkO2');
 const chartFlow = document.getElementById('chartFlow');
@@ -83,19 +73,6 @@ const btnWifiSave = document.getElementById('btnWifiSave');
 const btnWifiForget = document.getElementById('btnWifiForget');
 const wifiLanHint = document.getElementById('wifiLanHint');
 const btnHrvMeasure = document.getElementById('btnHrvMeasure');
-const btnCpMeasure = document.getElementById('btnCpMeasure');
-const actionsHint = document.getElementById('actionsHint');
-const cpModal = document.getElementById('cpModal');
-const cpModalBackdrop = document.getElementById('cpModalBackdrop');
-const btnCpClose = document.getElementById('btnCpClose');
-const cpTimer = document.getElementById('cpTimer');
-const cpStatus = document.getElementById('cpStatus');
-const cpChartSpo2 = document.getElementById('cpChartSpo2');
-const cpChartHr = document.getElementById('cpChartHr');
-const cpSpo2Now = document.getElementById('cpSpo2Now');
-const cpHrNow = document.getElementById('cpHrNow');
-const btnCpFinish = document.getElementById('btnCpFinish');
-const btnCpSave = document.getElementById('btnCpSave');
 
 const formControls = [gpioPin, servoPin, gpioState, servoAngle, servoAuto];
 
@@ -119,14 +96,6 @@ let gpioSyncLocked = false;
 let chartWindowSec = 300;
 let selectedWifi = null;
 let beltDisplayName = 'Нагрудный HR';
-let cpUi = 'idle';
-let cpStartedAt = null;
-let cpStopAt = null;
-let cpFrozenAt = null;
-let cpDurationSec = 0;
-let cpWindowSec = CP_WINDOW_INITIAL_SEC;
-let cpTicker = null;
-const cpHistory = { t: [], spo2: [], hrWellue: [], hrCoospo: [] };
 const emptySources = {
   o2: false,
   flow: false,
@@ -603,7 +572,7 @@ async function hydrateTrends() {
   try {
     let offset = 0;
     let replace = true;
-    for (let page = 0; page < TRENDS_HYDRATE_MAX_PAGES; page += 1) {
+    for (let page = 0; page < 16; page += 1) {
       const res = await fetchWithTimeout(
         apiUrl(`/api/trends?offset=${offset}&limit=${TRENDS_PAGE}`),
         {},
@@ -711,9 +680,8 @@ function formatRange(vals, format) {
   return `${format(last)}  ·  ${format(min)}–${format(max)}`;
 }
 
-function xOf(t, now, x0, plotW, windowSec) {
-  const win = windowSec ?? chartWindowSec;
-  const start = now - win * 1000;
+function xOf(t, now, x0, plotW) {
+  const start = now - chartWindowSec * 1000;
   const span = Math.max(1, now - start);
   return x0 + ((t - start) / span) * plotW;
 }
@@ -723,19 +691,19 @@ function yOf(v, min, max, y0, plotH) {
   return y0 + plotH - ((v - min) / span) * plotH;
 }
 
-function setupCanvas(canvas, cssW, cssH, dpr) {
-  const ratio = dpr ?? (window.devicePixelRatio || 1);
-  const width = Math.max(1, cssW ?? (canvas.clientWidth || canvas.parentElement?.clientWidth || 320));
-  const height = Math.max(1, cssH ?? (canvas.clientHeight || 148));
-  const w = Math.round(width * ratio);
-  const h = Math.round(height * ratio);
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || canvas.parentElement.clientWidth || 320;
+  const cssH = canvas.clientHeight || 148;
+  const w = Math.max(1, Math.round(cssW * dpr));
+  const h = Math.max(1, Math.round(cssH * dpr));
   if (canvas.width !== w || canvas.height !== h) {
     canvas.width = w;
     canvas.height = h;
   }
   const ctx = canvas.getContext('2d');
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  return { ctx, w: width, h: height };
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w: cssW, h: cssH };
 }
 
 window.__oxy = {
@@ -758,7 +726,7 @@ function loadHrvModule() {
   return Promise.resolve();
 }
 
-function drawSeries(ctx, pts, now, x0, y0, plotW, plotH, yMin, yMax, color, dashed, windowSec) {
+function drawSeries(ctx, pts, now, x0, y0, plotW, plotH, yMin, yMax, color, dashed) {
   ctx.save();
   ctx.strokeStyle = color;
   ctx.lineWidth = 1.6;
@@ -774,7 +742,7 @@ function drawSeries(ctx, pts, now, x0, y0, plotW, plotH, yMin, yMax, color, dash
       prevT = null;
       continue;
     }
-    const x = xOf(p.t, now, x0, plotW, windowSec);
+    const x = xOf(p.t, now, x0, plotW);
     const y = yOf(p.v, yMin, yMax, y0, plotH);
     if (!open || (prevT != null && p.t - prevT > POLL_MS * 2.5)) {
       ctx.moveTo(x, y);
@@ -788,41 +756,12 @@ function drawSeries(ctx, pts, now, x0, y0, plotW, plotH, yMin, yMax, color, dash
   ctx.restore();
 }
 
-function drawVerticalTimeGrid(ctx, opts, now, windowSec, x0, y0, plotW, plotH) {
-  const gridSec = opts?.timeGridSec;
-  const origin = opts?.timeOrigin;
-  if (!gridSec || gridSec <= 0 || origin == null || !Number.isFinite(origin)) {
-    return;
-  }
-  const step = gridSec * 1000;
-  const winStart = now - windowSec * 1000;
-  let t = origin;
-  if (t < winStart) {
-    t += Math.ceil((winStart - t) / step) * step;
-  }
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.lineWidth = 1;
-  for (; t <= now + step; t += step) {
-    const x = xOf(t, now, x0, plotW, windowSec);
-    if (x < x0 || x > x0 + plotW) continue;
-    ctx.beginPath();
-    ctx.moveTo(x, y0);
-    ctx.lineTo(x, y0 + plotH);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawTrendChart(canvas, series, yFallback, emptyText, opts) {
+function drawTrendChart(canvas, series, yFallback, emptyText) {
   if (!canvas) return;
-  const { ctx, w, h } = opts && opts.w
-    ? setupCanvas(canvas, opts.w, opts.h, opts.dpr)
-    : setupCanvas(canvas);
+  const { ctx, w, h } = setupCanvas(canvas);
   ctx.clearRect(0, 0, w, h);
 
-  const windowSec = opts?.windowSec ?? chartWindowSec;
-  const now = opts?.now ?? Date.now();
+  const now = Date.now();
   const x0 = CHART_PAD.left;
   const y0 = CHART_PAD.top;
   const plotW = Math.max(1, w - CHART_PAD.left - CHART_PAD.right);
@@ -851,8 +790,6 @@ function drawTrendChart(canvas, series, yFallback, emptyText, opts) {
     ctx.fillText(yFallback.format(v), x0 - 6, y);
   }
 
-  drawVerticalTimeGrid(ctx, opts, now, windowSec, x0, y0, plotW, plotH);
-
   ctx.strokeStyle = '#333';
   ctx.strokeRect(x0 + 0.5, y0 + 0.5, plotW - 1, plotH - 1);
 
@@ -865,22 +802,7 @@ function drawTrendChart(canvas, series, yFallback, emptyText, opts) {
     ctx.fillText(emptyText, x0 + plotW / 2, y0 + plotH / 2);
   } else {
     for (const s of series) {
-      drawSeries(ctx, s.pts, now, x0, y0, plotW, plotH, yMin, yMax, s.color, !!s.dashed, windowSec);
-    }
-  }
-
-  if (opts?.markerT != null && Number.isFinite(opts.markerT)) {
-    const mx = xOf(opts.markerT, now, x0, plotW, windowSec);
-    if (mx >= x0 && mx <= x0 + plotW) {
-      ctx.save();
-      ctx.strokeStyle = opts.markerColor ?? '#38bdf8';
-      ctx.lineWidth = 1.6;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(mx, y0);
-      ctx.lineTo(mx, y0 + plotH);
-      ctx.stroke();
-      ctx.restore();
+      drawSeries(ctx, s.pts, now, x0, y0, plotW, plotH, yMin, yMax, s.color, !!s.dashed);
     }
   }
 
@@ -888,51 +810,33 @@ function drawTrendChart(canvas, series, yFallback, emptyText, opts) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
   ctx.font = '10px system-ui, sans-serif';
-  const leftLabel = windowSec >= 120
-    ? `−${Math.round(windowSec / 60)} мин`
-    : `−${windowSec} с`;
-  ctx.fillText(leftLabel, x0, y0 + plotH + 6);
+  ctx.fillText(`−${chartWindowSec / 60} мин`, x0, y0 + plotH + 6);
   ctx.textAlign = 'right';
-  ctx.fillText(opts?.rightLabel ?? 'сейчас', x0 + plotW, y0 + plotH + 6);
+  ctx.fillText('сейчас', x0 + plotW, y0 + plotH + 6);
 }
 
 function updateTrendsHint() {
-  if (trendsHint) {
-    if (!anyTrendSource()) {
-      trendsHint.textContent = 'Включите «Тренд» на плитке датчика — набор хранится на ESP32';
-    } else {
-      const min = chartWindowSec / 60;
-      const filled = history.t.length;
-      const filledMin = Math.max(1, Math.round(filled / 60));
-      const span = filled < 60 ? `${filled} с` : `${filledMin} мин`;
-      const ringMin = Math.round(CHART_MAX_SEC / 60);
-      trendsHint.textContent =
-        `Окно ${min} мин · 1 Гц · история на ESP32 (${span} из ~${ringMin} мин, RAM)`;
-    }
+  if (!trendsHint) return;
+  if (!anyTrendSource()) {
+    trendsHint.textContent = 'Включите «Тренд» на плитке датчика — набор хранится на ESP32';
+    return;
   }
-  syncTrendsSaveButton();
+  const min = chartWindowSec / 60;
+  const filled = history.t.length;
+  const filledMin = Math.max(1, Math.round(filled / 60));
+  const span = filled < 60 ? `${filled} с` : `${filledMin} мин`;
+  trendsHint.textContent =
+    `Окно ${min} мин · 1 Гц · история на ESP32 (${span} из ~30 мин, RAM)`;
 }
 
-function syncTrendsSaveButton() {
-  if (!btnTrendsSave) return;
-  btnTrendsSave.disabled = !anyTrendSource() || history.t.length === 0;
+function drawPanel(panelId, canvas, nowEl, pts, color, fallback, formatNow, emptyText) {
+  setPanelHidden(panelId, false);
+  const vals = valuesOf(pts);
+  if (nowEl) nowEl.textContent = formatRange(vals, formatNow) || '—';
+  drawTrendChart(canvas, [{ pts, color }], fallback, emptyText);
 }
 
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
-
-function trendsFilenameStamp(date) {
-  const d = date instanceof Date ? date : new Date();
-  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}_${pad2(d.getHours())}${pad2(d.getMinutes())}`;
-}
-
-function trendsExportStamp(date) {
-  const d = date instanceof Date ? date : new Date();
-  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}.${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-}
-
-function listVisibleTrendPanels() {
+function drawAllCharts() {
   const showO2 = !!trendSources.o2;
   const showWorkO2 = !!trendSources.work_o2;
   const showFlow = !!trendSources.flow;
@@ -946,63 +850,65 @@ function listVisibleTrendPanels() {
   const dualHr = showWellue && showHrBelt;
   const drawBeltHr = showHrBelt && (!dualHr || hrViewBelt);
   const drawWellueHr = showWellue && (!dualHr || hrViewWellue);
-  const panels = [];
 
-  const pushPanel = (panelId, canvas, nowEl, title, pts, color, fallback, formatNow, emptyText) => {
-    panels.push({
-      panelId,
-      canvas,
-      nowEl,
-      title,
-      nowText: formatRange(valuesOf(pts), formatNow) || '—',
-      series: [{ pts, color }],
-      fallback,
-      emptyText,
-    });
-  };
+  setPanelHidden('panelO2', !showO2);
+  setPanelHidden('panelWorkO2', !showWorkO2);
+  setPanelHidden('panelFlow', !showFlow);
+  setPanelHidden('panelPressure', !showPressure);
+  setPanelHidden('panelWorkPressure', !showWorkPressure);
+  setPanelHidden('panelCo2', !showCo2);
+  setPanelHidden('panelSpo2', !showWellue);
+  setPanelHidden('panelHr', !showHr);
+  setPanelHidden('panelRr', !showRr);
 
   if (showO2) {
-    pushPanel('panelO2', chartO2, chartO2Now, 'O₂ · гипоксия',
-      pointsInWindow(history.o2), '#22d3ee',
+    drawPanel('panelO2', chartO2, chartO2Now, pointsInWindow(history.o2), '#22d3ee',
       { min: 18, max: 22, format: (v) => v.toFixed(1) },
       (v) => `${v.toFixed(1)} %`, 'нет O₂');
   }
   if (showWorkO2) {
-    pushPanel('panelWorkO2', chartWorkO2, chartWorkO2Now, 'O₂ · рабочий',
-      pointsInWindow(history.workO2), '#67e8f9',
+    drawPanel('panelWorkO2', chartWorkO2, chartWorkO2Now, pointsInWindow(history.workO2), '#67e8f9',
       { min: 18, max: 22, format: (v) => v.toFixed(1) },
       (v) => `${v.toFixed(1)} %`, 'нет O₂');
   }
   if (showFlow) {
-    pushPanel('panelFlow', chartFlow, chartFlowNow, 'Дыхательная активность · рабочий',
-      pointsInWindow(history.flow), '#a78bfa',
+    drawPanel('panelFlow', chartFlow, chartFlowNow, pointsInWindow(history.flow), '#a78bfa',
       { min: 0, max: 30, format: (v) => v.toFixed(1) },
       (v) => `${v.toFixed(1)} л/мин`, 'нет данных');
   }
   if (showPressure) {
-    pushPanel('panelPressure', chartPressure, chartPressureNow, 'Давление · гипоксия',
-      pointsInWindow(history.pressure), '#e879f9',
+    drawPanel('panelPressure', chartPressure, chartPressureNow, pointsInWindow(history.pressure), '#e879f9',
       { min: 980, max: 1040, format: (v) => v.toFixed(0) },
       (v) => `${v.toFixed(1)} hPa`, 'нет давления');
   }
   if (showWorkPressure) {
-    pushPanel('panelWorkPressure', chartWorkPressure, chartWorkPressureNow, 'Давление · рабочий',
+    drawPanel('panelWorkPressure', chartWorkPressure, chartWorkPressureNow,
       pointsInWindow(history.workPressure), '#f0abfc',
       { min: 980, max: 1040, format: (v) => v.toFixed(0) },
       (v) => `${v.toFixed(1)} hPa`, 'нет давления');
   }
   if (showCo2) {
-    pushPanel('panelCo2', chartCo2, chartCo2Now, 'CO₂ · рабочий',
-      pointsInWindow(history.co2), '#60a5fa',
+    drawPanel('panelCo2', chartCo2, chartCo2Now, pointsInWindow(history.co2), '#60a5fa',
       { min: 400, max: 2000, format: (v) => v.toFixed(0) },
       (v) => `${v.toFixed(0)} ppm`, 'нет CO₂');
   }
   if (showWellue) {
-    pushPanel('panelSpo2', chartSpo2, chartSpo2Now, 'SpO₂',
-      pointsInWindow(history.spo2), '#4ade80',
+    drawPanel('panelSpo2', chartSpo2, chartSpo2Now, pointsInWindow(history.spo2), '#4ade80',
       { min: 90, max: 100, format: (v) => v.toFixed(0) },
       (v) => `${v.toFixed(0)} %`, 'нет SpO₂');
   }
+
+  if (hrLegendBelt) hrLegendBelt.textContent = beltDisplayName;
+  if (hrLegendBeltWrap) {
+    hrLegendBeltWrap.hidden = !showHrBelt;
+    hrLegendBeltWrap.classList.toggle('plain', !dualHr);
+  }
+  if (hrLegendWellueWrap) {
+    hrLegendWellueWrap.hidden = !showWellue;
+    hrLegendWellueWrap.classList.toggle('plain', !dualHr);
+  }
+  syncHrViewInputs();
+
   if (showHr) {
     const hrCoospoPts = drawBeltHr ? pointsInWindow(history.hrCoospo) : [];
     const hrWelluePts = drawWellueHr ? pointsInWindow(history.hrWellue) : [];
@@ -1015,470 +921,32 @@ function listVisibleTrendPanels() {
       const last = lastFinite(hrWelluePts.map((p) => p.v));
       if (last != null) parts.push(`Wellue ${last.toFixed(0)}`);
     }
+    if (chartHrNow) chartHrNow.textContent = parts.length ? `${parts.join(' · ')} bpm` : '—';
     const hrSeries = [];
     if (drawBeltHr) hrSeries.push({ pts: hrCoospoPts, color: '#f87171' });
     if (drawWellueHr) hrSeries.push({ pts: hrWelluePts, color: '#fb923c', dashed: true });
-    panels.push({
-      panelId: 'panelHr',
-      canvas: chartHr,
-      nowEl: chartHrNow,
-      title: 'ЧСС',
-      nowText: parts.length ? `${parts.join(' · ')} bpm` : '—',
-      series: hrSeries,
-      fallback: { min: 50, max: 140, format: (v) => v.toFixed(0) },
-      emptyText: 'нет ЧСС',
-    });
+    drawTrendChart(
+      chartHr,
+      hrSeries,
+      { min: 50, max: 140, format: (v) => v.toFixed(0) },
+      'нет ЧСС',
+    );
   }
+
   if (showRr) {
-    pushPanel('panelRr', chartRr, chartRrNow, 'R-R',
-      pointsInWindow(history.rr), '#f87171',
+    drawPanel('panelRr', chartRr, chartRrNow, pointsInWindow(history.rr), '#f87171',
       { min: 400, max: 1200, format: (v) => v.toFixed(0) },
       (v) => `${v.toFixed(0)} мс`, 'нет R-R');
   }
-
-  return {
-    panels,
-    showO2,
-    showWorkO2,
-    showFlow,
-    showPressure,
-    showWorkPressure,
-    showCo2,
-    showWellue,
-    showHrBelt,
-    showRr,
-    showHr,
-    dualHr,
-  };
-}
-
-function drawAllCharts() {
-  const vis = listVisibleTrendPanels();
-
-  setPanelHidden('panelO2', !vis.showO2);
-  setPanelHidden('panelWorkO2', !vis.showWorkO2);
-  setPanelHidden('panelFlow', !vis.showFlow);
-  setPanelHidden('panelPressure', !vis.showPressure);
-  setPanelHidden('panelWorkPressure', !vis.showWorkPressure);
-  setPanelHidden('panelCo2', !vis.showCo2);
-  setPanelHidden('panelSpo2', !vis.showWellue);
-  setPanelHidden('panelHr', !vis.showHr);
-  setPanelHidden('panelRr', !vis.showRr);
-
-  if (hrLegendBelt) hrLegendBelt.textContent = beltDisplayName;
-  if (hrLegendBeltWrap) {
-    hrLegendBeltWrap.hidden = !vis.showHrBelt;
-    hrLegendBeltWrap.classList.toggle('plain', !vis.dualHr);
-  }
-  if (hrLegendWellueWrap) {
-    hrLegendWellueWrap.hidden = !vis.showWellue;
-    hrLegendWellueWrap.classList.toggle('plain', !vis.dualHr);
-  }
-  syncHrViewInputs();
-
-  for (const panel of vis.panels) {
-    if (panel.nowEl) panel.nowEl.textContent = panel.nowText;
-    drawTrendChart(panel.canvas, panel.series, panel.fallback, panel.emptyText);
-  }
-  syncTrendsSaveButton();
-}
-
-function saveTrendsImage() {
-  const vis = listVisibleTrendPanels();
-  if (!vis.panels.length || history.t.length === 0) {
-    if (trendsHint) {
-      trendsHint.textContent = 'Нечего сохранять — включите тренд и дождитесь точек';
-    }
-    return;
-  }
-
-  const now = new Date();
-  const windowMin = Math.max(1, Math.round(chartWindowSec / 60));
-  const pad = TREND_EXPORT_PAD;
-  const headerH = 56;
-  const metaH = 26;
-  const plotH = TREND_EXPORT_PLOT_H;
-  const panelGap = 12;
-  const dpr = 2;
-  const n = vis.panels.length;
-  const exportW = TREND_EXPORT_W;
-  const exportH = pad + headerH + n * (metaH + plotH) + Math.max(0, n - 1) * panelGap + pad;
-  const canvas = document.createElement('canvas');
-  const { ctx, w, h } = setupCanvas(canvas, exportW, exportH, dpr);
-
-  ctx.fillStyle = '#1c1c1c';
-  ctx.fillRect(0, 0, w, h);
-
-  let y = pad;
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText('OxyPulse · Тренды', pad, y);
-  y += 26;
-  ctx.fillStyle = '#888888';
-  ctx.font = '13px system-ui, sans-serif';
-  ctx.fillText(`Окно ${windowMin} мин · ${trendsExportStamp(now)}`, pad, y);
-  y += headerH - 26;
-
-  const contentW = exportW - pad * 2;
-  for (const panel of vis.panels) {
-    ctx.fillStyle = '#dddddd';
-    ctx.font = 'bold 14px system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(panel.title, pad, y);
-    ctx.fillStyle = '#aaaaaa';
-    ctx.font = '13px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(panel.nowText, exportW - pad, y);
-    y += metaH;
-
-    const plotCanvas = document.createElement('canvas');
-    drawTrendChart(plotCanvas, panel.series, panel.fallback, panel.emptyText, {
-      w: contentW,
-      h: plotH,
-      dpr,
-    });
-    ctx.drawImage(plotCanvas, pad, y, contentW, plotH);
-    y += plotH + panelGap;
-  }
-
-  canvas.toBlob((blob) => {
-    if (!blob) {
-      if (trendsHint) {
-        trendsHint.textContent = 'Не удалось сохранить картинку';
-      }
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `oxypulse_trends_${windowMin}min_${trendsFilenameStamp(now)}.png`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, 'image/png');
 }
 
 function setChartWindow(sec) {
   chartWindowSec = sec;
-  document.querySelectorAll('#trendsSection .window-pill').forEach((btn) => {
+  document.querySelectorAll('.window-pill').forEach((btn) => {
     btn.classList.toggle('active', Number(btn.dataset.window) === sec);
   });
   updateTrendsHint();
   drawAllCharts();
-}
-
-function isCpOpen() {
-  return cpUi !== 'idle';
-}
-
-function isCpLive() {
-  return cpUi === 'recording' || cpUi === 'afterglow';
-}
-
-function clearCpHistory() {
-  cpHistory.t = [];
-  cpHistory.spo2 = [];
-  cpHistory.hrWellue = [];
-  cpHistory.hrCoospo = [];
-}
-
-function cpNowMs() {
-  if (cpUi === 'done' && cpFrozenAt != null) return cpFrozenAt;
-  return Date.now();
-}
-
-function cpElapsedSec(now = cpNowMs()) {
-  if (cpStartedAt == null) return 0;
-  return Math.max(0, Math.floor((now - cpStartedAt) / 1000));
-}
-
-function expandCpWindow(elapsedSec) {
-  while (elapsedSec >= cpWindowSec - CP_EXPAND_LEAD_SEC) {
-    cpWindowSec += CP_WINDOW_EXPAND_SEC;
-  }
-}
-
-function cpHasSpo2() {
-  return cpHistory.spo2.some((v) => v != null && Number.isFinite(v));
-}
-
-function stopCpTicker() {
-  if (cpTicker) {
-    clearInterval(cpTicker);
-    cpTicker = null;
-  }
-}
-
-function cpPoints(values) {
-  const now = cpNowMs();
-  const start = now - cpWindowSec * 1000;
-  const pts = [];
-  for (let i = 0; i < cpHistory.t.length; i += 1) {
-    if (cpHistory.t[i] >= start) {
-      pts.push({ t: cpHistory.t[i], v: values[i] });
-    }
-  }
-  return pts;
-}
-
-function updateCpChrome() {
-  const elapsed = cpElapsedSec();
-  if (cpTimer) {
-    if (cpUi === 'afterglow' && cpStopAt != null) {
-      const rec = Math.min(
-        CP_AFTERGLOW_SEC,
-        Math.max(0, Math.floor((Date.now() - cpStopAt) / 1000)),
-      );
-      cpTimer.textContent = `КП ${cpDurationSec} сек · восстановление ${rec} / ${CP_AFTERGLOW_SEC}`;
-    } else if (cpUi === 'done') {
-      cpTimer.textContent = `КП ${cpDurationSec} сек`;
-    } else {
-      cpTimer.textContent = `КП ${elapsed} сек`;
-    }
-  }
-  if (cpStatus) {
-    if (cpUi === 'recording') {
-      cpStatus.textContent = 'Задержите дыхание. Основные тренды на странице продолжают писаться.';
-    } else if (cpUi === 'afterglow') {
-      cpStatus.textContent = 'Конец замера отмечен (голубая линия). Ещё 45 с восстановления — можно сохранить.';
-    } else if (cpUi === 'done') {
-      cpStatus.textContent = 'Замер завершён. Сохраните картинку или закройте окно.';
-    } else {
-      cpStatus.textContent = '—';
-    }
-  }
-  if (btnCpFinish) {
-    btnCpFinish.hidden = cpUi !== 'recording';
-  }
-  if (btnCpSave) {
-    btnCpSave.disabled = cpHistory.t.length === 0;
-  }
-}
-
-function drawCpCharts() {
-  const now = cpNowMs();
-  const optsBase = {
-    windowSec: cpWindowSec,
-    now,
-    timeGridSec: 10,
-    timeOrigin: cpStartedAt,
-    markerT: cpStopAt,
-    markerColor: '#38bdf8',
-  };
-  const spo2Pts = cpPoints(cpHistory.spo2);
-  const spo2Vals = valuesOf(spo2Pts);
-  if (cpSpo2Now) cpSpo2Now.textContent = formatRange(spo2Vals, (v) => `${v.toFixed(0)} %`) || '—';
-  drawTrendChart(
-    cpChartSpo2,
-    [{ pts: spo2Pts, color: '#4ade80' }],
-    { min: 90, max: 100, format: (v) => v.toFixed(0) },
-    'нет SpO₂',
-    optsBase,
-  );
-
-  const hrW = cpPoints(cpHistory.hrWellue);
-  const hrC = cpPoints(cpHistory.hrCoospo);
-  const parts = [];
-  const lastC = lastFinite(hrC.map((p) => p.v));
-  const lastW = lastFinite(hrW.map((p) => p.v));
-  if (lastC != null) parts.push(`ремень ${lastC.toFixed(0)}`);
-  if (lastW != null) parts.push(`Wellue ${lastW.toFixed(0)}`);
-  if (cpHrNow) cpHrNow.textContent = parts.length ? `${parts.join(' · ')} bpm` : '—';
-  const hrSeries = [];
-  if (hrC.some((p) => p.v != null)) hrSeries.push({ pts: hrC, color: '#f87171' });
-  if (hrW.some((p) => p.v != null)) hrSeries.push({ pts: hrW, color: '#fb923c', dashed: true });
-  drawTrendChart(
-    cpChartHr,
-    hrSeries,
-    { min: 50, max: 140, format: (v) => v.toFixed(0) },
-    'нет ЧСС',
-    optsBase,
-  );
-}
-
-function tickCpModal() {
-  if (!isCpOpen()) {
-    stopCpTicker();
-    return;
-  }
-  if (cpUi === 'afterglow' && cpStopAt != null
-      && (Date.now() - cpStopAt) >= CP_AFTERGLOW_SEC * 1000) {
-    cpUi = 'done';
-    cpFrozenAt = Date.now();
-    stopCpTicker();
-  }
-  if (isCpLive()) {
-    expandCpWindow(cpElapsedSec());
-  }
-  updateCpChrome();
-  drawCpCharts();
-}
-
-function feedCpFromStatus(data) {
-  if (!isCpLive()) return;
-  const s = data.sensors || {};
-  const wellue = s.wellue || {};
-  const coospo = s.coospo || {};
-  const wellueLive = !!wellue.ok && wellue.contact !== false;
-  const coospoLive = !!coospo.ok && coospo.connected !== false && coospo.contact !== false;
-  const lastT = cpHistory.t.length ? cpHistory.t[cpHistory.t.length - 1] : 0;
-  const t = Date.now();
-  if (t - lastT < 500) return;
-  cpHistory.t.push(t);
-  cpHistory.spo2.push(wellueLive ? saneSpo2(wellue.spo2) : null);
-  cpHistory.hrWellue.push(wellueLive ? saneHr(wellue.hr) : null);
-  cpHistory.hrCoospo.push(coospoLive ? saneHr(coospo.bpm) : null);
-  expandCpWindow(cpElapsedSec(t));
-  updateCpChrome();
-  drawCpCharts();
-}
-
-function openCpModal() {
-  if (!baseUrl) {
-    alert('Сначала подключитесь к ESP32');
-    return;
-  }
-  if (!cpModal || isCpOpen()) return;
-  clearCpHistory();
-  cpUi = 'recording';
-  cpStartedAt = Date.now();
-  cpStopAt = null;
-  cpFrozenAt = null;
-  cpDurationSec = 0;
-  cpWindowSec = CP_WINDOW_INITIAL_SEC;
-  cpModal.hidden = false;
-  cpModal.setAttribute('aria-hidden', 'false');
-  if (btnCpFinish) btnCpFinish.hidden = false;
-  stopCpTicker();
-  cpTicker = setInterval(tickCpModal, 1000);
-  updateCpChrome();
-  drawCpCharts();
-}
-
-function closeCpModal() {
-  stopCpTicker();
-  cpUi = 'idle';
-  cpStartedAt = null;
-  cpStopAt = null;
-  cpFrozenAt = null;
-  cpDurationSec = 0;
-  cpWindowSec = CP_WINDOW_INITIAL_SEC;
-  clearCpHistory();
-  if (cpModal) {
-    cpModal.hidden = true;
-    cpModal.setAttribute('aria-hidden', 'true');
-  }
-}
-
-function finishCpMeasure() {
-  if (cpUi !== 'recording') return;
-  cpDurationSec = cpElapsedSec();
-  cpStopAt = Date.now();
-  if (cpHasSpo2()) {
-    cpUi = 'afterglow';
-  } else {
-    cpFrozenAt = Date.now();
-    cpUi = 'done';
-    stopCpTicker();
-  }
-  updateCpChrome();
-  drawCpCharts();
-}
-
-function saveCpImage() {
-  if (!cpHistory.t.length) {
-    if (cpStatus) cpStatus.textContent = 'Нечего сохранять — нет точек';
-    return;
-  }
-  const stampDate = new Date();
-  const dur = cpUi === 'recording' ? cpElapsedSec() : cpDurationSec;
-  const now = cpNowMs();
-  const pad = TREND_EXPORT_PAD;
-  const headerH = 72;
-  const metaH = 26;
-  const plotH = 120;
-  const panelGap = 12;
-  const dpr = 2;
-  const exportW = 560;
-  const cpChartOpts = {
-    w: contentW,
-    h: plotH,
-    dpr,
-    windowSec: cpWindowSec,
-    now,
-    timeGridSec: 10,
-    timeOrigin: cpStartedAt,
-    markerT: cpStopAt,
-    markerColor: '#38bdf8',
-  };
-  const panels = [
-    {
-      title: 'SpO₂',
-      nowText: cpSpo2Now?.textContent || '—',
-      series: [{ pts: cpPoints(cpHistory.spo2), color: '#4ade80' }],
-      fallback: { min: 90, max: 100, format: (v) => v.toFixed(0) },
-      emptyText: 'нет SpO₂',
-    },
-    {
-      title: 'ЧСС',
-      nowText: cpHrNow?.textContent || '—',
-      series: [
-        { pts: cpPoints(cpHistory.hrCoospo), color: '#f87171' },
-        { pts: cpPoints(cpHistory.hrWellue), color: '#fb923c', dashed: true },
-      ],
-      fallback: { min: 50, max: 140, format: (v) => v.toFixed(0) },
-      emptyText: 'нет ЧСС',
-    },
-  ];
-  const exportH = pad + headerH + panels.length * (metaH + plotH) + panelGap + pad;
-  const canvas = document.createElement('canvas');
-  const { ctx, w, h } = setupCanvas(canvas, exportW, exportH, dpr);
-  ctx.fillStyle = '#1c1c1c';
-  ctx.fillRect(0, 0, w, h);
-  let y = pad;
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'top';
-  ctx.fillText('OxyPulse · КП Бутейко', pad, y);
-  y += 26;
-  ctx.fillStyle = '#fbbf24';
-  ctx.font = 'bold 14px system-ui, sans-serif';
-  ctx.fillText(`КП Бутейко: ${dur} сек`, pad, y);
-  y += 22;
-  ctx.fillStyle = '#888888';
-  ctx.font = '13px system-ui, sans-serif';
-  ctx.fillText(trendsExportStamp(stampDate), pad, y);
-  y += headerH - 48;
-  const contentW = exportW - pad * 2;
-  for (const panel of panels) {
-    ctx.fillStyle = '#dddddd';
-    ctx.font = 'bold 14px system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(panel.title, pad, y);
-    ctx.fillStyle = '#aaaaaa';
-    ctx.font = '13px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(panel.nowText, exportW - pad, y);
-    y += metaH;
-    const plotCanvas = document.createElement('canvas');
-    drawTrendChart(plotCanvas, panel.series, panel.fallback, panel.emptyText, cpChartOpts);
-    ctx.drawImage(plotCanvas, pad, y, contentW, plotH);
-    y += plotH + panelGap;
-  }
-  canvas.toBlob((blob) => {
-    if (!blob) {
-      if (cpStatus) cpStatus.textContent = 'Не удалось сохранить картинку';
-      return;
-    }
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `oxypulse_kp_${dur}s_${trendsFilenameStamp(stampDate)}.png`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }, 'image/png');
 }
 
 function renderWifiLanHint(wifi) {
@@ -1584,7 +1052,7 @@ function renderWifiNetworkList(networks) {
 }
 
 async function fetchWifiScanStatus() {
-  const res = await fetchWithTimeout(apiUrl('/api/wifi/scan'), {}, WIFI_SCAN_FETCH_TIMEOUT_MS);
+  const res = await fetchWithTimeout(apiUrl('/api/wifi/scan'), {}, FETCH_TIMEOUT_MS);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -1631,7 +1099,7 @@ async function scanWifiNetworks() {
       renderWifiNetworkList(networks);
       return;
     }
-    if (wifiScanStatus) wifiScanStatus.textContent = 'Таймаут скана — введите SSID вручную или перезагрузите ESP';
+    if (wifiScanStatus) wifiScanStatus.textContent = 'Таймаут скана — введите SSID вручную';
   } catch (e) {
     if (wifiScanStatus) wifiScanStatus.textContent = `Ошибка: ${e.message}. Введите SSID вручную.`;
   } finally {
@@ -1781,7 +1249,6 @@ function renderTelemetry(data) {
   if (anyTrendSource()) {
     pushHistory(data);
   }
-  feedCpFromStatus(data);
   updateTrendsHint();
   drawAllCharts();
 }
@@ -1971,31 +1438,11 @@ btnHrvMeasure?.addEventListener('click', async () => {
   }
 });
 
-document.querySelectorAll('#trendsSection .window-pill').forEach((btn) => {
+document.querySelectorAll('.window-pill').forEach((btn) => {
   if (!btn.dataset.window) return;
   btn.addEventListener('click', () => {
     setChartWindow(Number(btn.dataset.window) || 300);
   });
-});
-
-btnTrendsSave?.addEventListener('click', () => {
-  saveTrendsImage();
-});
-
-btnCpMeasure?.addEventListener('click', () => {
-  openCpModal();
-});
-btnCpClose?.addEventListener('click', () => {
-  closeCpModal();
-});
-cpModalBackdrop?.addEventListener('click', () => {
-  closeCpModal();
-});
-btnCpFinish?.addEventListener('click', () => {
-  finishCpMeasure();
-});
-btnCpSave?.addEventListener('click', () => {
-  saveCpImage();
 });
 
 async function postTrendSources(next) {

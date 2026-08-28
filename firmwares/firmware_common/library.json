@@ -1,0 +1,7 @@
+{
+  "name": "oxypulse-common",
+  "version": "1.0.0",
+  "description": "UART bridge protocol, BLE snapshots, logger for OxyPulse split firmware",
+  "frameworks": "arduino",
+  "platforms": "espressif32"
+}

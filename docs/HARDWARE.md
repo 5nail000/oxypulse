@@ -1,15 +1,41 @@
 # Аппаратная часть OxyPulse
 
-Единый справочник по проводке стенда. Константы в прошивке — [`firmware/src/config.h`](../firmware/src/config.h).
+Единый справочник по проводке стенда. Константы: [`firmware_main_devkit/src/config.h`](../firmwares/firmware_main_devkit/src/config.h), UART — [`firmware_common/src/uart_protocol.h`](../firmwares/firmware_common/src/uart_protocol.h).
 
-> API и JSON — [`API.md`](API.md) · прошивка — [`firmware/README.md`](../firmware/README.md) ·
-> веб-UI — [`web/README.md`](../web/README.md)
+> API и JSON — [`API.md`](API.md) · главный узел — [`firmware_main_devkit/README.md`](../firmwares/firmware_main_devkit/README.md) ·
+> BLE-узел — [`firmware_ble_s3/README.md`](../firmwares/firmware_ble_s3/README.md) / [`firmware_ble_devkit/README.md`](../firmwares/firmware_ble_devkit/README.md) · веб-UI — [`web/README.md`](../web/README.md)
 
-## Контроллер
+## Контроллеры (две ESP32)
 
-**ESP32 DevKit V1** (классический `esp32dev`, Type-C или micro-USB).
+| Плата | Прошивка | Роль |
+|-------|----------|------|
+| **ESP32-DEVKIT USB Type-C CH340** | [`firmware_main_devkit/`](../firmwares/firmware_main_devkit/) | WiFi, HTTP, I²C, клапан, HRV, тренды |
+| **ESP32-S3-N16R8** | [`firmware_ble_s3/`](../firmwares/firmware_ble_s3/) | BLE central (Wellue, COOSPO), без WiFi |
+| **ESP32-DEVKIT CH340** (вторая) | [`firmware_ble_devkit/`](../firmwares/firmware_ble_devkit/) | BLE central, без WiFi (альтернатива S3) |
 
-Общая **GND** у ESP32, всех датчиков, реле и сервы — обязательна. Без общей земли I²C и реле работают нестабильно.
+Монолит на одной плате — архив [`firmware_alone_devkit/`](../firmwares/firmware_alone_devkit/).
+
+Общая **GND** у обеих ESP32, всех датчиков, реле и сервы — обязательна. **3.3 V между платами не соединять**.
+
+---
+
+## UART-мост (BLE-узел ↔ главный DevKit)
+
+921600 8N1, NDJSON (один JSON на строку). RX0/TX0 на DevKit **не использовать** — это CH340 (прошивка и монитор).
+
+Прямая коммутация одноимённых пинов (на обеих платах BLE: **TX=GPIO16, RX=GPIO17**; на main: **RX=GPIO16, TX=GPIO17**):
+
+```
+BLE-узел (S3 или вторая DevKit)     ESP32-DEVKIT CH340 (главный)
+GPIO16  TX  ───────────────────  GPIO16  RX   (Serial2)
+GPIO17  RX  ───────────────────  GPIO17  TX   (Serial2)
+GND         ───────────────────  GND
+```
+
+На S3-N16R8 не трогать: **19/20** (USB), **26–37** (octal flash/PSRAM), **43/44** (UART0).
+На второй DevKit не трогать **GPIO1/3** (CH340).
+
+Протокол (BLE → main): `hello`, `wellue`, `coospo` (~1 Гц), `rr` (каждый интервал). Обратный канал в v1 не нужен.
 
 ---
 
@@ -17,41 +43,52 @@
 
 | Модуль | Интерфейс | Адрес / протокол | Питание | GPIO / шина |
 |--------|-----------|------------------|---------|-------------|
-| ADS1115 + AO-02 | I²C | `0x48` (ADDR→GND) | 3.3 V | SDA 22, SCL 23 |
-| SFM3300-250-D | I²C | `0x40` | **5 V** (I²C 3.3 V) | SDA 22, SCL 23 |
-| Adafruit DPS310 | I²C | `0x76` / `0x77` | 3.3 V | SDA 22, SCL 23 |
-| SCD41 | I²C | `0x62` | 3.3 V или 5 V | SDA 22, SCL 23 |
+| ADS1115 + AO-02 | I²C гипоксия | `0x48` (ADDR→GND) | 3.3 V | SDA **22**, SCL **23** |
+| DPS310 | I²C гипоксия | `0x76` / `0x77` | 3.3 V | SDA **22**, SCL **23** |
+| ADS1115 + AO-02 | I²C рабочий | `0x48` | 3.3 V | SDA **18**, SCL **19** |
+| DPS310 | I²C рабочий | `0x76` / `0x77` | 3.3 V | SDA **18**, SCL **19** |
+| SFM3300-250-D | I²C рабочий | `0x40` | **5 V** (I²C 3.3 V) | SDA **18**, SCL **19** |
+| SCD41 | I²C рабочий | `0x62` | 3.3 V или 5 V | SDA **18**, SCL **19** |
 | Реле / клапан | GPIO | — | 5 V модуль реле | **GPIO 26**, HIGH=ON |
-| Servo (тест) | PWM | — | **отдельные 5 V** | GPIO 18 (или whitelist) |
-| Wellue Ring O2 S | BLE | OxyII GATT | аккумулятор кольца | ESP32 central |
-| COOSPO H6M | BLE | Heart Rate 0x180D | аккумулятор ремня | ESP32 central |
+| Servo (тест) | PWM | — | **отдельные 5 V** | GPIO **25** (или whitelist, не 18/19/16/17) |
+| UART-мост | UART 921600 | NDJSON | 3.3 V | **16↔16**, **17↔17** (main + BLE) |
+| Wellue Ring O2 S | BLE | OxyII GATT | аккумулятор кольца | BLE central (`firmware_ble_s3` / `firmware_ble_devkit`) |
+| COOSPO H6M | BLE | Heart Rate 0x180D | аккумулятор ремня | BLE central (`firmware_ble_s3` / `firmware_ble_devkit`) |
 
 ---
 
-## I²C — общая шина
+## I²C — две шины
 
-| Сигнал | GPIO | В `config.h` |
-|--------|------|--------------|
-| **SDA** | **22** | `I2C_SDA_PIN` |
-| **SCL** | **23** | `I2C_SCL_PIN` |
-| Частота | **100 kHz** | `I2C_CLOCK_HZ` |
+На ESP32 DevKit V1 (**WROOM-32**) GPIO **20 нет**. Рабочий контур: **SDA=18 / SCL=19**.
+
+| Шина | Роль | SDA | SCL | Частота |
+|------|------|-----|-----|---------|
+| **Hypoxia** | буфер гипоксии: O₂ + давление | **22** | **23** | 100 kHz |
+| **Working** | рабочий контур: O₂, давление, поток, CO₂ | **18** | **19** | 100 kHz |
+| Hyperoxia | буфер гипероксии (позже) | 32/33 | | не 18/19 — заняты рабочим |
+
+На каждой шине **свои** pull-up 4.7 kΩ к 3.3 V (или уже есть на breakout этой шины). Общая GND обязательна.
+
+Адреса на разных шинах **могут совпадать** (оба ADS1115 = `0x48`).
+
+### Запрещено как GPIO, пока занято I²C
+
+| GPIO | Причина |
+|------|---------|
+| **34, 35** | input-only, SDA/SCL нельзя |
+| **2, 15** | strapping pins |
+| **22, 23** | шина гипоксии |
+| **18, 19** | шина рабочего контура |
+| **16, 17** | UART-мост к BLE-узлу |
 
 ### Подтяжки
 
 - **SDA** и **SCL** — два отдельных резистора (обычно **4.7 kΩ**) к **3.3 V**, **не к 5 V**.
 - Логика шины — **3.3 V** (ESP32, ADS1115, DPS310, SCD41 breakout).
 - SFM3300 питается от 5 V, но I²C совместим с подтяжкой к 3.3 V (HIGH ≥ 2.5 V по [даташиту SFM3300](https://sensirion.com/media/documents/8ECF0D28/62D13110/Sensirion_Datasheet_SFM3300-AW_SFM3300-D.pdf)).
-- **Одна пара** pull-up на всю шину. На breakout (ADS1115, SCD41, DPS310) подтяжки часто уже есть — дополнительные на SFM3300 не нужны.
+- **Одна пара** pull-up на **каждую** шину. На breakout (ADS1115, SCD41, DPS310) подтяжки часто уже есть — дополнительные на SFM3300 не нужны.
 
-### Запрещено
-
-| GPIO | Причина |
-|------|---------|
-| **34, 35** | input-only на `esp32dev`, SDA/SCL нельзя |
-| **2, 15** | strapping pins — для I²C не рекомендуются |
-| **22, 23** | заняты I²C — не использовать как GPIO через веб/API |
-
-При старте прошивка сканирует шину и пишет найденные адреса в Serial. Отсутствующий модуль не блокирует остальные.
+При старте прошивка сканирует **обе** шины и пишет найденные адреса в Serial. Отсутствующий модуль не блокирует остальные.
 
 ---
 
@@ -77,20 +114,20 @@
 | **1 + 2** (вместе) | **A1** | Vsensor− |
 | **3** | **A0** | Vsensor+ |
 
-Калибровка — [`firmware/README.md`](../firmware/README.md): `O2_OFFSET_MV`, `O2_AIR_MV`.
+Калибровка — [`firmware_main_devkit/README.md`](../firmwares/firmware_main_devkit/README.md): `O2_HYPOXIA_*`, `O2_WORKING_*`.
 
 ---
 
-## SFM3300-250-D (поток)
+## SFM3300-250-D (поток, **рабочий контур**)
 
-На разъёме датчика: **SCK** = SCL, **DATA** = SDA.
+На разъёме датчика: **SCK** = SCL, **DATA** = SDA. Шина **Working**: SDA=**18**, SCL=**19**.
 
 | Pin | Имя | Подключение |
 |-----|-----|-------------|
 | 2 | VDD | **5 V** |
 | 4 | GND | GND ESP32 |
-| 3 | SCK | GPIO **23** (SCL) |
-| 5 | DATA | GPIO **22** (SDA) |
+| 3 | SCK | GPIO **19** (SCL) |
+| 5 | DATA | GPIO **18** (SDA) |
 | 1 | HEAT_GND | не подключать |
 | 6 | HEAT | не подключать |
 
@@ -99,8 +136,8 @@ SFM3300          ESP32 / шина
 ──────────────────────────────
 Pin 2  VDD   →   5 V
 Pin 4  GND   →   GND
-Pin 3  SCK  ──→ GPIO 23 (SCL)
-Pin 5  DATA ──→ GPIO 22 (SDA)
+Pin 3  SCK  ──→ GPIO 19 (SCL)
+Pin 5  DATA ──→ GPIO 18 (SDA)
          │              │
          └── 4.7 kΩ ────┴──→ 3.3 V  (если нет pull-up на других модулях)
 ```
@@ -123,8 +160,8 @@ Breakout [Adafruit DPS310](https://learn.adafruit.com/adafruit-dps310-barometric
 |-----|------|------|
 | VIN | 3.3 V | Питание |
 | GND | GND | |
-| SDI | GPIO **22** | SDA |
-| SCK | GPIO **23** | SCL |
+| SDI | GPIO **22** (гипоксия) или **18** (рабочий) | SDA |
+| SCK | GPIO **23** (гипоксия) или **19** (рабочий) | SCL |
 | SDO | GND → **`0x76`** / 3.3 V → **`0x77`** | адрес I²C |
 | CS | **не подключать** | иначе модуль уйдёт в SPI |
 
@@ -137,7 +174,7 @@ Breakout [Adafruit DPS310](https://learn.adafruit.com/adafruit-dps310-barometric
 | Параметр | Значение |
 |----------|----------|
 | Адрес | **`0x62`** |
-| I²C | SDA 22, SCL 23 |
+| I²C | SDA/SCL шины **Working** (18/19) |
 | Питание | 3.3 V или 5 V (по модулю), I²C — 3.3 V логика |
 | Обновление | раз в **5 с**; прогрев ~10 с после старта |
 
@@ -151,8 +188,8 @@ Breakout [Adafruit DPS310](https://learn.adafruit.com/adafruit-dps310-barometric
 |--------|--------|--------------|
 | **Красный** | 3.3 V | 3.3 V (**не 5 V**) |
 | **Чёрный** | GND | GND |
-| **Жёлтый** | SCL | GPIO **23** |
-| **Синий** | SDA | GPIO **22** |
+| **Жёлтый** | SCL | GPIO **23** (гипоксия) или **19** (рабочий) |
+| **Синий** | SDA | GPIO **22** (гипоксия) или **18** (рабочий) |
 
 Модули можно цепочкой (out → in), например **SCD41 → DPS310**. GND с ESP32 обязательна.
 
@@ -164,7 +201,9 @@ Breakout [Adafruit DPS310](https://learn.adafruit.com/adafruit-dps310-barometric
 
 Whitelist в прошивке (`GPIO_WHITELIST`):
 
-`13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33`
+`13, 14, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33`
+
+Не используй **18, 19, 22, 23** как обычные GPIO, пока на них I²C. **16/17** — UART, в whitelist нет.
 
 ### Типовая схема клапана
 
@@ -205,7 +244,7 @@ Whitelist в прошивке (`GPIO_WHITELIST`):
 
 ## BLE — внешние датчики
 
-ESP32 работает как **BLE central**: сам сканирует, подключается и отдаёт данные в `/api/status`. Телефон/браузер к этим устройствам **не подключается**.
+**BLE-узел** (`firmwares/firmware_ble_s3` или `firmware_ble_devkit`) работает как **BLE central**: сам сканирует, подключается и шлёт снимки на главный узел по UART. Телефон/браузер к кольцу и ремню **не подключается**. Главный узел BLE не поднимает.
 
 ### Wellue Ring O2 S
 
@@ -225,13 +264,13 @@ ESP32 работает как **BLE central**: сам сканирует, под
 | Characteristic | `0x2A37` (Measurement) |
 | Данные | ЧСС (bpm), R-R интервал — если ремень отдаёт |
 
-Автопоиск и reconnect при старте ESP32. Одновременно с WiFi нужен **modem sleep** — см. [`firmware/README.md`](../firmware/README.md).
+Автопоиск и reconnect при старте BLE-узла. WiFi на S3 выключен — coexistence нет.
 
 ---
 
 ## Диагностика
 
-1. **Serial 115200** после прошивки — I²C-скан, статус каждого датчика.
+1. **Serial 115200** главного узла — I²C-скан; `UART bridge: hello` когда BLE-узел на связи. `sensors.bridge.ok` в `/api/status`.
 2. Отсутствующий I²C-адрес → питание и pull-up, не код.
 3. SFM3300 «молчит» → проверить **5 V ≥ 4.75 V**, длину и экран кабеля.
 4. DPS310 не виден → SDO (0x76 vs 0x77), **CS не подключён**.
