@@ -109,10 +109,15 @@ STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`. �
 | Поле | Тип |
 |---|---|
 | `ok` | bool |
-| `ppm` | int |
-| `percent` | float |
-| `temp_c`, `rh` | float |
+| `ppm` | int — отображаемое (`ppm_est` при `dynamic_comp`, иначе `ppm_raw`) |
+| `ppm_raw` | int — сырое с чипа |
+| `ppm_est` | int — оценка с компенсацией инерции |
+| `dynamic_comp` | bool — сборка с `SCD41_CO2_DYNAMIC_COMP=1` |
+| `percent` | float — `ppm / 10000` |
+| `temp_c`, `rh` | float — сырые T/RH с чипа |
+| `temp_c_est`, `rh_est` | float — оценка T/RH (при `dynamic_comp`) |
 | `warming_up` | bool |
+| `asc_enabled` | bool — ASC чипа (задаётся `SCD41_ASC_ENABLED` в `platformio.ini` при старте) |
 
 ### `sensors.wellue`
 
@@ -158,7 +163,12 @@ UART к BLE-узлу (только сплит `firmware_main_devkit`). Веб м
 {"cmd":"servo_set","pin":25,"angle":90}
 {"cmd":"servo_auto","pin":25,"enabled":true,"pause_ms":5000}
 {"cmd":"flow_reset"}
+{"cmd":"co2_frc","target_ppm":400}
 ```
+
+`co2_frc` — Forced Recalibration: датчик должен 3+ минуты работать в известной среде (обычно 400 ppm, свежий воздух). Команда останавливает periodic mode, пишет в EEPROM датчика и запускает измерения снова.
+
+ASC (Automatic Self-Calibration) — только через флаг сборки `SCD41_ASC_ENABLED` в `platformio.ini` (по умолчанию `0` для маски/контура). При старте прошивка задаёт ASC и сохраняет в EEPROM датчика. В UI и HTTP-команд нет.
 
 `pin` ∈ `whitelist`. Не использовать как GPIO: **22/23** (гипоксия), **18/19** (рабочий), **16/17** (UART-мост).
 
@@ -174,7 +184,8 @@ UART к BLE-узлу (только сплит `firmware_main_devkit`). Веб м
 
 - 1 Гц, ~75 мин RAM (кольцо 4500 точек в heap на DevKit); reboot обнуляет точки
 - `GET /api/trends?offset=&limit=` — постранично (max 300)
-- Массив `flow` в JSON трендов — **среднее VE за 30 с** (`ve_lpm`, л/мин), не мгновенный `slm`
+- Массив `flow` в JSON трендов — **среднее VE за 30 с** (`ve_lpm`, л/мин), не мгновенный поток
+- При `SCD41_CO2_DYNAMIC_COMP=1`: `co2` — ppm оценки (est), `co2_raw` — ppm с чипа (hold между sample 5 с)
 
 ---
 

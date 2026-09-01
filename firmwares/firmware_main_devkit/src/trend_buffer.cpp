@@ -24,6 +24,7 @@ struct Sample {
     int16_t hr_wellue;
     int16_t hr_coospo;
     int16_t co2;
+    int16_t co2_raw;
     int16_t o2;
     int16_t flow;
     int16_t pressure;
@@ -81,6 +82,8 @@ int16_t sampleAt(size_t logical, size_t field) {
             return s.hr_coospo;
         case 3:
             return s.co2;
+        case 10:
+            return s.co2_raw;
         case 4:
             return s.o2;
         case 5:
@@ -305,6 +308,7 @@ void trendBufferPoll() {
     s.hr_wellue = TREND_MISSING;
     s.hr_coospo = TREND_MISSING;
     s.co2 = TREND_MISSING;
+    s.co2_raw = TREND_MISSING;
     s.o2 = TREND_MISSING;
     s.flow = TREND_MISSING;
     s.pressure = TREND_MISSING;
@@ -332,6 +336,9 @@ void trendBufferPoll() {
     }
     if (bitOn(TREND_SRC_CO2) && co2.ok) {
         s.co2 = clampI16Pos(co2.co2_ppm);
+#if SCD41_CO2_DYNAMIC_COMP
+        s.co2_raw = clampI16Pos(co2.co2_ppm_raw);
+#endif
     }
     if (bitOn(TREND_SRC_O2) && o2.ok) {
         s.o2 = scale10(o2.o2_percent);
@@ -415,6 +422,10 @@ void trendBufferWriteJson(TrendJsonSink sink, size_t offset, size_t limit) {
     writeArray(&b, 2, start, n, TREND_SRC_HR);
     chunkAppendCstr(&b, ",\"co2\":");
     writeArray(&b, 3, start, n, TREND_SRC_CO2);
+#if SCD41_CO2_DYNAMIC_COMP
+    chunkAppendCstr(&b, ",\"co2_raw\":");
+    writeArray(&b, 10, start, n, TREND_SRC_CO2);
+#endif
     chunkAppendCstr(&b, ",\"o2\":");
     writeArray(&b, 4, start, n, TREND_SRC_O2);
     chunkAppendCstr(&b, ",\"flow\":");

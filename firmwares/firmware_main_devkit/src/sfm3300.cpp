@@ -219,7 +219,9 @@ void flowTask(void *param) {
         }
         fail_streak = 0;
 
-        const float flow_slm = (static_cast<float>(raw) - g_offset) / g_scale;
+        // Инверсия знака: на стенде «+» сенсора = выдох в маску, «−» = вдох.
+        const float flow_slm =
+            -(static_cast<float>(raw) - g_offset) / g_scale;
         const uint32_t now = millis();
         if (g_mutex != nullptr && xSemaphoreTake(g_mutex, portMAX_DELAY) == pdTRUE) {
             g_flow_slm = flow_slm;

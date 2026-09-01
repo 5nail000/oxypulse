@@ -47,6 +47,19 @@ UI берётся из [`web/`](../../web/) (`data_dir = ../../web` в `platform
 
 При старте — I2C-скан в Serial. В `/api/status` поле `sensors.bridge.ok` — жив ли UART с S3.
 
+## Флаги сборки (`platformio.ini`)
+
+| Флаг | По умолчанию | Смысл |
+|---|---|---|
+| `WORKING_PRESSURE_BMP390` | `1` | Рабочий I2C: BMP390 вместо DPS310 |
+| `SCD41_CO2_DYNAMIC_COMP` | `1` | Компенсация инерции CO₂ + T/RH (оценка + `co2_raw` в тренде) |
+| `SCD41_CO2_TAU_SEC` | `60` | Постоянная времени τ CO₂, с |
+| `SCD41_CO2_TRUST` | `70` | Доверие к lead-поправке, % (70 = 0.7 как в MVP) |
+| `SCD41_CO2_COMP_MAX_DELTA_PPM` | `15000` | Макс. коррекция CO₂ за шаг, ppm |
+| `SCD41_ASC_ENABLED` | `0` | ASC чипа: `1` = вкл (открытый воздух), `0` = выкл (маска/контур) |
+
 ## Калибровка
 
-Константы в [`src/config.h`](src/config.h). Порядок тот же, что в [`firmware_alone_devkit/README.md`](../firmware_alone_devkit/README.md).
+Константы в [`src/config.h`](src/config.h). Порядок O₂/поток — как в [`firmware_alone_devkit/README.md`](../firmware_alone_devkit/README.md).
+
+**CO₂ SCD41:** FRC — кнопка в веб-UI или `{"cmd":"co2_frc","target_ppm":400}` (3+ мин на ~400 ppm). ASC — только `SCD41_ASC_ENABLED` в `platformio.ini`, применяется при старте и пишется в EEPROM датчика.

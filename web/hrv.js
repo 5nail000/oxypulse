@@ -174,6 +174,7 @@
   function openHrvModal() {
     if (!hrvModal) return;
     clearHrvTimers();
+    deps().cancelMainChartRedraw?.();
     hrvDurationSec = HRV_DEFAULT_SEC;
     lastHrvMetrics = null;
     hrvPollFails = 0;
@@ -194,6 +195,7 @@
     hrvModal.setAttribute('aria-hidden', 'true');
     setHrvStep('idle');
     hrvClosing = false;
+    deps().resumeMainCharts?.();
   }
 
   async function showHrvError(message) {

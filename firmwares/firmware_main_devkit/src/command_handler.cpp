@@ -106,6 +106,18 @@ bool parseCommandJson(const char *json, size_t len) {
         sfm3300ResetVolume();
         return true;
     }
+    if (strcmp(cmd, "co2_frc") == 0) {
+        uint16_t target_ppm = 400;
+        if (doc["target_ppm"].is<int>() || doc["target_ppm"].is<uint16_t>()) {
+            target_ppm = doc["target_ppm"].as<uint16_t>();
+        }
+        if (target_ppm < 400 || target_ppm > 2000) {
+            logPrintf("cmd: co2_frc target_ppm вне диапазона");
+            return false;
+        }
+        scd41RequestForcedRecalibration(target_ppm);
+        return true;
+    }
 
     logPrintf("cmd: неизвестная команда '%s'", cmd);
     return false;
@@ -166,6 +178,8 @@ size_t buildStatusJson(char *buffer, size_t capacity) {
         obj["ok"] = snap.ok;
         obj["hpa"] = snap.pressure_hpa;
         obj["temp_c"] = snap.temp_c;
+        obj["baseline_hpa"] = snap.baseline_hpa;
+        obj["baseline_ok"] = snap.baseline_ok;
     };
     auto fillFlow = [](JsonObject obj, const FlowSnapshot &snap) {
         obj["ok"] = snap.ok;
@@ -180,10 +194,16 @@ size_t buildStatusJson(char *buffer, size_t capacity) {
     auto fillCo2 = [](JsonObject obj, const Scd41Snapshot &snap) {
         obj["ok"] = snap.ok;
         obj["ppm"] = snap.co2_ppm;
+        obj["ppm_raw"] = snap.co2_ppm_raw;
+        obj["ppm_est"] = snap.co2_ppm_est;
+        obj["dynamic_comp"] = snap.dynamic_comp;
         obj["percent"] = static_cast<float>(snap.co2_ppm) / 10000.0f;
         obj["temp_c"] = snap.temp_c;
+        obj["temp_c_est"] = snap.temp_c_est;
         obj["rh"] = snap.rh_percent;
+        obj["rh_est"] = snap.rh_percent_est;
         obj["warming_up"] = snap.warming_up;
+        obj["asc_enabled"] = snap.asc_enabled;
     };
 
     fillO2(sensors["o2"].to<JsonObject>(), o2);

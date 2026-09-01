@@ -80,6 +80,10 @@ constexpr uint8_t ADDR_ADS1115 = 0x48;
 constexpr uint8_t ADDR_SFM3300 = 0x40;
 constexpr uint8_t ADDR_DPS310 = 0x76;  // SDO→GND; 0x77 если SDO→VCC
 constexpr uint8_t ADDR_DPS310_ALT = 0x77;
+// Рабочий I2C: BMP390 (CJMCU-390) те же 0x76/0x77. Флаг — в platformio.ini.
+#ifndef WORKING_PRESSURE_BMP390
+#define WORKING_PRESSURE_BMP390 0
+#endif
 constexpr uint8_t ADDR_SCD41 = 0x62;
 
 // AO-02 калибровка (каждый датчик — своя пара OFFSET/AIR_MV)
@@ -105,6 +109,43 @@ constexpr uint32_t DPS_POLL_INTERVAL_MS = 100;
 // SCD41 (датчик обновляет значения раз в 5 с)
 constexpr uint32_t SCD41_POLL_INTERVAL_MS = 1000;
 constexpr uint32_t SCD41_WARMUP_MS = 10000;
+// Компенсация инерции. Параметры как в OxyPulse MVP. Флаги — platformio.ini.
+#ifndef SCD41_CO2_DYNAMIC_COMP
+#define SCD41_CO2_DYNAMIC_COMP 0
+#endif
+#ifndef SCD41_CO2_TAU_SEC
+#define SCD41_CO2_TAU_SEC 60
+#endif
+#ifndef SCD41_CO2_TRUST
+#define SCD41_CO2_TRUST 70
+#endif
+#ifndef SCD41_CO2_COMP_MAX_DELTA_PPM
+#define SCD41_CO2_COMP_MAX_DELTA_PPM 15000
+#endif
+#ifndef SCD41_ASC_ENABLED
+#define SCD41_ASC_ENABLED 0
+#endif
+constexpr float SCD41_TAU_CO2_S = static_cast<float>(SCD41_CO2_TAU_SEC > 0 ? SCD41_CO2_TAU_SEC : 60);
+constexpr float SCD41_TAU_TRUST_CO2 = static_cast<float>(SCD41_CO2_TRUST) / 100.0f;
+constexpr float SCD41_MAX_CORR_PPM = static_cast<float>(SCD41_CO2_COMP_MAX_DELTA_PPM);
+constexpr float SCD41_TAU_TEMP_S = 120.0f;
+constexpr float SCD41_TAU_RH_S = 90.0f;
+constexpr float SCD41_TAU_TRUST_TEMP = 0.35f;
+constexpr float SCD41_TAU_TRUST_RH = 0.35f;
+constexpr float SCD41_DECAY_DAMPING_TEMP = 0.25f;
+constexpr float SCD41_DECAY_DAMPING_RH = 0.25f;
+constexpr float SCD41_SAMPLE_INTERVAL_S = 5.0f;
+constexpr size_t SCD41_SLOPE_WINDOW = 5;
+constexpr float SCD41_MAX_CORR_TEMP_C = 2.0f;
+constexpr float SCD41_MAX_CORR_RH = 12.0f;
+constexpr float SCD41_BASELINE_ALPHA = 0.04f;
+constexpr uint16_t SCD41_EVENT_CO2_PPM = 150;
+constexpr float SCD41_EVENT_TEMP_C = 1.5f;
+constexpr float SCD41_EVENT_RH = 8.0f;
+constexpr float SCD41_CLAMP_TEMP_BELOW_C = 2.0f;
+constexpr float SCD41_CLAMP_TEMP_ABOVE_C = 8.0f;
+constexpr float SCD41_CLAMP_RH_BELOW = 10.0f;
+constexpr float SCD41_CLAMP_RH_ABOVE = 25.0f;
 
 // HRV-сессия: все R-R с ремня (не 1 Гц тренд)
 constexpr size_t HRV_RR_MAX = 600;

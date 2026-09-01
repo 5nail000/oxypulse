@@ -177,6 +177,8 @@ Breakout [Adafruit DPS310](https://learn.adafruit.com/adafruit-dps310-barometric
 | I²C | SDA/SCL шины **Working** (18/19) |
 | Питание | 3.3 V или 5 V (по модулю), I²C — 3.3 V логика |
 | Обновление | раз в **5 с**; прогрев ~10 с после старта |
+| FRC | Кнопка/API `co2_frc` — калибровка на ~400 ppm (свежий воздух, 3+ мин) |
+| ASC | `SCD41_ASC_ENABLED` в `platformio.ini` (`0` для маски, `1` для открытого воздуха) |
 
 ---
 

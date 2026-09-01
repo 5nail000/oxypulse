@@ -166,6 +166,8 @@ size_t buildStatusJson(char *buffer, size_t capacity) {
         obj["ok"] = snap.ok;
         obj["hpa"] = snap.pressure_hpa;
         obj["temp_c"] = snap.temp_c;
+        obj["baseline_hpa"] = snap.baseline_hpa;
+        obj["baseline_ok"] = snap.baseline_ok;
     };
     auto fillFlow = [](JsonObject obj, const FlowSnapshot &snap) {
         obj["ok"] = snap.ok;

@@ -338,6 +338,15 @@ button.btn-secondary:disabled:hover { background: #374151; }
   padding: 6px 10px;
   font-size: 0.85rem;
 }
+.co2-calib {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.co2-calib .btn-compact {
+  margin-top: 0;
+}
 
 .trends-head {
   display: flex;
@@ -446,6 +455,14 @@ button.btn-secondary:disabled:hover { background: #374151; }
 }
 .swatch-coospo { background: #f87171; }
 .swatch-wellue { background: #fb923c; }
+.swatch-co2-est { background: #60a5fa; }
+.swatch-co2-raw {
+  background: repeating-linear-gradient(
+    90deg,
+    #93c5fd 0 3px,
+    transparent 3px 6px
+  );
+}
 .chart-now {
   margin-left: auto;
   font-size: 0.85rem;
@@ -586,6 +603,10 @@ button.btn-secondary:disabled:hover { background: #374151; }
   max-width: 560px;
   width: min(560px, calc(100vw - 32px));
 }
+.cp-timer-wrap {
+  text-align: center;
+  margin: 0 0 8px;
+}
 .cp-timer {
   font-size: 1.8rem;
   font-weight: 700;
@@ -601,4 +622,51 @@ button.btn-secondary:disabled:hover { background: #374151; }
 }
 .cp-actions {
   margin-top: 14px;
+}
+
+.practice-panel {
+  max-width: 720px;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(92dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.practice-panel .modal-head h2 {
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+.practice-timer-wrap {
+  text-align: center;
+  margin: 0 0 8px;
+}
+.practice-timer {
+  font-size: 3rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+.practice-afterglow {
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.practice-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.practice-panel .chart-panel {
+  margin-top: 10px;
+}
+.practice-panel .chart-panel canvas {
+  height: 112px;
+}
+.practice-actions {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #333;
 }

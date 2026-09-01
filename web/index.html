@@ -102,7 +102,10 @@
           <div id="sensorFlow" class="sensor-tile">
             <div class="sensor-tile-head">
               <div class="sensor-title">Поток SFM3300</div>
-              <button type="button" class="btn-trend" data-src="flow">Тренд</button>
+              <div class="trend-btn-group">
+                <button type="button" class="btn-trend" data-src="flow">Тренд</button>
+                <button type="button" class="btn-trend" id="btnFlowDynamics">Динамика</button>
+              </div>
             </div>
             <div id="flowPhase" class="flow-phase idle" aria-live="polite">—</div>
             <div class="sensor-value">—</div>
@@ -114,6 +117,9 @@
               <button type="button" class="btn-trend" data-src="co2">Тренд</button>
             </div>
             <div class="sensor-value">—</div>
+            <div class="co2-calib">
+              <button id="btnCo2Frc" type="button" class="btn-secondary btn-compact">Калибровка 400 ppm</button>
+            </div>
           </div>
         </div>
       </div>
@@ -147,6 +153,7 @@
       <div class="btn-row actions-row">
         <button type="button" id="btnHrvMeasure" disabled>Замерить HRV</button>
         <button type="button" id="btnCpMeasure">Замер КП Бутейко</button>
+        <button type="button" id="btnPracticeMeasure">Практика Бутейко на Тренажёре</button>
       </div>
       <p class="muted" id="actionsHint"></p>
     </section>
@@ -183,10 +190,17 @@
         </article>
         <article class="chart-panel" id="panelFlow" hidden>
           <div class="chart-meta">
-            <span class="chart-title">Дыхательная активность · рабочий</span>
+            <span class="chart-title">Минутная вентиляция · рабочий</span>
             <span class="chart-now" id="chartFlowNow">—</span>
           </div>
           <canvas id="chartFlow"></canvas>
+        </article>
+        <article class="chart-panel" id="panelFlowDynamics" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Поток вдох/выдох · рабочий</span>
+            <span class="chart-now" id="chartFlowDynamicsNow">—</span>
+          </div>
+          <canvas id="chartFlowDynamics"></canvas>
         </article>
         <article class="chart-panel" id="panelPressure" hidden>
           <div class="chart-meta">
@@ -205,6 +219,16 @@
         <article class="chart-panel" id="panelCo2" hidden>
           <div class="chart-meta">
             <span class="chart-title">CO₂ · рабочий</span>
+            <span class="chart-legend" id="co2LegendWrap" hidden>
+              <span class="chart-src plain">
+                <span class="swatch swatch-co2-est"></span>
+                <span>оценка</span>
+              </span>
+              <span class="chart-src plain">
+                <span class="swatch swatch-co2-raw"></span>
+                <span>датчик</span>
+              </span>
+            </span>
             <span class="chart-now" id="chartCo2Now">—</span>
           </div>
           <canvas id="chartCo2"></canvas>
@@ -278,7 +302,9 @@
         <h2 id="cpModalTitle">Замер КП Бутейко</h2>
         <button type="button" id="btnCpClose" class="btn-secondary btn-compact">Закрыть</button>
       </div>
-      <p id="cpTimer" class="cp-timer">КП 0 сек</p>
+      <div id="cpTimerWrap" class="cp-timer-wrap" hidden>
+        <p id="cpTimer" class="cp-timer">КП 0 сек</p>
+      </div>
       <p id="cpStatus" class="muted">—</p>
       <article class="chart-panel" id="cpPanelSpo2">
         <div class="chart-meta">
@@ -305,8 +331,101 @@
         <canvas id="cpChartHr"></canvas>
       </article>
       <div class="btn-row cp-actions">
-        <button type="button" id="btnCpFinish">Завершить</button>
-        <button type="button" id="btnCpSave" class="btn-secondary">Сохранить PNG</button>
+        <button type="button" id="btnCpStart">СТАРТ</button>
+        <button type="button" id="btnCpFinish" hidden>Завершить</button>
+        <button type="button" id="btnCpSave" class="btn-secondary" hidden>Сохранить PNG</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="practiceModal" class="modal" hidden aria-hidden="true">
+    <div class="modal-backdrop" id="practiceModalBackdrop"></div>
+    <div class="modal-panel card practice-panel" role="dialog" aria-labelledby="practiceModalTitle">
+      <div class="modal-head">
+        <h2 id="practiceModalTitle">Практика Бутейко на Тренажёре</h2>
+        <button type="button" id="btnPracticeClose" class="btn-secondary btn-compact">Закрыть</button>
+      </div>
+      <div id="practiceTimerWrap" class="practice-timer-wrap" hidden>
+        <p id="practiceTimer" class="practice-timer">0</p>
+        <p id="practiceAfterglow" class="practice-afterglow muted" hidden></p>
+      </div>
+      <div class="practice-body">
+        <p id="practiceEmptyHint" class="muted">Нет контакта датчиков — графики появятся при подключении</p>
+        <article class="chart-panel" id="practicePanelSpo2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Сатурация (кольцо)</span>
+            <span class="chart-now" id="practiceSpo2Now">—</span>
+          </div>
+          <canvas id="practiceChartSpo2"></canvas>
+        </article>
+        <article class="chart-panel" id="practicePanelHr" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">HR</span>
+            <span class="chart-legend">
+              <span class="chart-src plain" id="practiceHrLegendBeltWrap" hidden>
+                <span class="swatch swatch-coospo"></span>
+                <span id="practiceHrLegendBelt">Нагрудный</span>
+              </span>
+              <span class="chart-src plain" id="practiceHrLegendWellueWrap" hidden>
+                <span class="swatch swatch-wellue"></span>
+                <span>Кольцо</span>
+              </span>
+            </span>
+            <span class="chart-now" id="practiceHrNow">—</span>
+          </div>
+          <canvas id="practiceChartHr"></canvas>
+        </article>
+        <article class="chart-panel" id="practicePanelRr" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">R-R</span>
+            <span class="chart-now" id="practiceRrNow">—</span>
+          </div>
+          <canvas id="practiceChartRr"></canvas>
+        </article>
+        <article class="chart-panel" id="practicePanelVe" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Минутная вентиляция</span>
+            <span class="chart-now" id="practiceVeNow">—</span>
+          </div>
+          <canvas id="practiceChartVe"></canvas>
+        </article>
+        <article class="chart-panel" id="practicePanelFlow" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Поток</span>
+            <span class="chart-now" id="practiceFlowNow">—</span>
+          </div>
+          <canvas id="practiceChartFlow"></canvas>
+        </article>
+        <article class="chart-panel" id="practicePanelO2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">O₂ · рабочий</span>
+            <span class="chart-now" id="practiceO2Now">—</span>
+          </div>
+          <canvas id="practiceChartO2"></canvas>
+        </article>
+        <article class="chart-panel" id="practicePanelCo2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">CO₂ · рабочий</span>
+            <span class="chart-legend" id="practiceCo2LegendWrap" hidden>
+              <span class="chart-src plain">
+                <span class="swatch swatch-co2-est"></span>
+                <span>оценка</span>
+              </span>
+              <span class="chart-src plain">
+                <span class="swatch swatch-co2-raw"></span>
+                <span>датчик</span>
+              </span>
+            </span>
+            <span class="chart-now" id="practiceCo2Now">—</span>
+          </div>
+          <canvas id="practiceChartCo2"></canvas>
+        </article>
+      </div>
+      <div class="btn-row practice-actions">
+        <button type="button" id="btnPracticeStart">СТАРТ</button>
+        <button type="button" id="btnPracticeFinish" hidden>Завершить</button>
+        <button type="button" id="btnPracticeSave" class="btn-secondary" hidden>Сохранить графики</button>
+        <button type="button" id="btnPracticeRepeat" class="btn-secondary" hidden>Повторение</button>
       </div>
     </div>
   </div>

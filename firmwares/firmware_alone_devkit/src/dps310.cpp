@@ -2,6 +2,8 @@
 
 #include <Adafruit_DPS310.h>
 #include <Arduino.h>
+#include <algorithm>
+#include <cmath>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
@@ -22,8 +24,10 @@ struct Channel {
     uint8_t address = ADDR_DPS310;
     float pressure_hpa = 0.0f;
     float temp_c = 0.0f;
+    float baseline_hpa = 0.0f;
     bool ok = false;
     bool ready = false;
+    bool baseline_ok = false;
 };
 
 Channel g_hypoxia;
@@ -54,6 +58,59 @@ bool detectAddress(Channel &ch, uint8_t &address) {
         return true;
     }
     return false;
+}
+
+bool calibrateBaseline(Channel &ch) {
+    constexpr size_t kSamples = 24;
+    constexpr float kBandHpa = 1.5f;
+    float samples[kSamples];
+    size_t count = 0;
+
+    for (size_t i = 0; i < kSamples; ++i) {
+        float pressure_hpa = 0.0f;
+        float temp_c = 0.0f;
+        I2cLock lock(ch.bus);
+        if (lock.ok()) {
+            sensors_event_t temp_event;
+            sensors_event_t pressure_event;
+            ch.dps.getEvents(&temp_event, &pressure_event);
+            pressure_hpa = pressure_event.pressure;
+            temp_c = temp_event.temperature;
+            samples[count++] = pressure_hpa;
+        }
+        vTaskDelay(pdMS_TO_TICKS(DPS_POLL_INTERVAL_MS));
+    }
+    if (count < 8) {
+        return false;
+    }
+
+    std::sort(samples, samples + count);
+    const float median = samples[count / 2];
+
+    float sum = 0.0f;
+    size_t good = 0;
+    for (size_t i = 0; i < count; ++i) {
+        if (std::fabs(samples[i] - median) <= kBandHpa) {
+            sum += samples[i];
+            ++good;
+        }
+    }
+    if (good < 6) {
+        return false;
+    }
+
+    if (ch.mutex == nullptr || xSemaphoreTake(ch.mutex, portMAX_DELAY) != pdTRUE) {
+        return false;
+    }
+    ch.baseline_hpa = sum / static_cast<float>(good);
+    ch.baseline_ok = true;
+    xSemaphoreGive(ch.mutex);
+    logPrintf("%s: baseline %.1f hPa (%u/%u samples)",
+              ch.tag,
+              static_cast<double>(ch.baseline_hpa),
+              static_cast<unsigned>(good),
+              static_cast<unsigned>(count));
+    return true;
 }
 
 bool initSensor(Channel &ch) {
@@ -94,6 +151,10 @@ void dpsTask(void *param) {
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 continue;
             }
+            ch->baseline_ok = false;
+            if (!calibrateBaseline(*ch)) {
+                logPrintf("%s: baseline calibration failed", ch->tag);
+            }
         }
 
         float pressure_hpa = 0.0f;
@@ -115,6 +176,7 @@ void dpsTask(void *param) {
             if (++fail_streak >= 10) {
                 fail_streak = 0;
                 ch->ready = false;
+                ch->baseline_ok = false;
                 setSnapshot(*ch, 0.0f, 0.0f, false);
             }
         } else {
@@ -156,7 +218,9 @@ Dps310Snapshot snapshotOf(Channel &ch) {
     }
     snap.pressure_hpa = ch.pressure_hpa;
     snap.temp_c = ch.temp_c;
+    snap.baseline_hpa = ch.baseline_hpa;
     snap.ok = ch.ok;
+    snap.baseline_ok = ch.baseline_ok;
     xSemaphoreGive(ch.mutex);
     return snap;
 }

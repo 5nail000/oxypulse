@@ -45,7 +45,11 @@ const char *knownDeviceName(I2cBusId bus, uint8_t address) {
             return "ADS1115 (O₂ рабочий)";
         case ADDR_DPS310:
         case ADDR_DPS310_ALT:
+#if WORKING_PRESSURE_BMP390
+            return "BMP390 (давление рабочий)";
+#else
             return "DPS310 (давление рабочий)";
+#endif
         case ADDR_SCD41:
             return "SCD41 (CO₂ рабочий)";
         default:
