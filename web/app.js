@@ -1103,12 +1103,18 @@ function restoreSessionTrendSources() {
   });
 }
 
+function isIgtLive() {
+  return !!window.OxyIgt?.isLive?.();
+}
+
 function shouldBackfillAfterGap(data) {
-  if (!anyTrendSource() && !isCpLive() && !isPracticeLive()) return false;
+  if (!anyTrendSource() && !isCpLive() && !isPracticeLive() && !isIgtLive()) return false;
   const espMs = Number(data.uptime_ms);
   const last = lastKnownEspMs();
-  if (!history.t.length && !isCpLive() && !isPracticeLive()) return true;
-  if (!Number.isFinite(espMs) || last == null) return isCpLive() || isPracticeLive() || !history.t.length;
+  if (!history.t.length && !isCpLive() && !isPracticeLive() && !isIgtLive()) return true;
+  if (!Number.isFinite(espMs) || last == null) {
+    return isCpLive() || isPracticeLive() || isIgtLive() || !history.t.length;
+  }
   if (espMs + 2000 < last) return true;
   return (espMs - last) > TRENDS_BACKFILL_MIN_GAP_MS;
 }
@@ -1296,7 +1302,23 @@ window.__oxy = {
   getApiUrl: (path) => apiUrl(path),
   fetchWithTimeout,
   setupCanvas,
+  drawTrendChart,
   getBaseUrl: () => baseUrl,
+  getLastStatus: () => lastStatus,
+  getTrendSources: () => ({ ...trendSources }),
+  isFlowDynamicsActive: () => !!flowDynamicsActive,
+  enableSessionTrendSources,
+  restoreSessionTrendSources,
+  wallFromEsp,
+  trendsFilenameStamp,
+  trendsExportStamp,
+  getPressureBaseline: () => pressureBaselineHpa,
+  getWorkPressureBaseline: () => workPressureBaselineHpa,
+  closeOtherActionModals() {
+    if (isCpOpen()) closeCpModal();
+    if (isPracticeOpen()) closePracticeModal();
+    closeHrvIfOpen();
+  },
   setStatusPollPaused(paused) {
     statusPollPaused = !!paused;
   },
@@ -1312,6 +1334,25 @@ function loadHrvModule() {
   }
   window.OxyHrv.init();
   return Promise.resolve();
+}
+
+function loadIgtModule() {
+  if (!window.OxyIgt) {
+    return Promise.reject(
+      new Error('igt.js не найден на ESP32. Выполните: cd firmware && pio run -t uploadfs'),
+    );
+  }
+  window.OxyIgt.init();
+  return Promise.resolve();
+}
+
+function isIgtOpen() {
+  return !!window.OxyIgt?.isOpen?.();
+}
+
+function closeIgtIfOpen() {
+  if (!isIgtOpen()) return;
+  window.OxyIgt.close();
 }
 
 function drawSeries(
@@ -1918,7 +1959,7 @@ function isCpOpen() {
 }
 
 function isActionModalOpen() {
-  return isCpOpen() || isPracticeOpen() || isHrvOpen();
+  return isCpOpen() || isPracticeOpen() || isHrvOpen() || isIgtOpen();
 }
 
 function cancelMainChartRedraw() {
@@ -2120,6 +2161,7 @@ function openCpModal() {
   if (!cpModal || isCpOpen()) return;
   if (isPracticeOpen()) closePracticeModal();
   closeHrvIfOpen();
+  closeIgtIfOpen();
   clearCpHistory();
   cancelMainChartRedraw();
   cpUi = 'ready';
@@ -2709,6 +2751,7 @@ function openPracticeModal() {
   if (!practiceModal || isPracticeOpen()) return;
   if (isCpOpen()) closeCpModal();
   closeHrvIfOpen();
+  closeIgtIfOpen();
   resetPracticeSession();
   cancelMainChartRedraw();
   practiceUi = 'ready';
@@ -3300,6 +3343,12 @@ function applyStatus(data, { syncForm = false } = {}) {
     syncGpioForm(data);
     syncServoForm(data);
   }
+  const igtBusy = !!(data.igt && data.igt.state && data.igt.state !== 'idle');
+  if (btnGpioApply) btnGpioApply.disabled = igtBusy;
+  if (btnGpioTap) btnGpioTap.disabled = igtBusy;
+  if (btnServoApply) btnServoApply.disabled = igtBusy;
+  if (servoAuto) servoAuto.disabled = igtBusy;
+  window.OxyIgt?.onStatus?.(data);
 }
 
 async function poll({ syncForm = false } = {}) {
@@ -3323,6 +3372,7 @@ async function poll({ syncForm = false } = {}) {
         (Date.now() - lastHydrateAt) >= TRENDS_BACKFILL_DEBOUNCE_MS
         || isCpLive()
         || isPracticeLive()
+        || isIgtLive()
       )
     ) {
       const ok = await hydrateTrends({
@@ -3499,6 +3549,7 @@ btnHrvMeasure?.addEventListener('click', async () => {
   if (btnHrvMeasure.disabled) return;
   if (isCpOpen()) closeCpModal();
   if (isPracticeOpen()) closePracticeModal();
+  closeIgtIfOpen();
   try {
     await loadHrvModule();
     window.OxyHrv?.open();
@@ -3519,6 +3570,7 @@ btnTrendsSave?.addEventListener('click', () => {
 });
 
 btnCpMeasure?.addEventListener('click', () => {
+  closeIgtIfOpen();
   openCpModal();
 });
 btnCpClose?.addEventListener('click', () => {
@@ -3538,6 +3590,7 @@ btnCpSave?.addEventListener('click', () => {
 });
 
 btnPracticeMeasure?.addEventListener('click', () => {
+  closeIgtIfOpen();
   openPracticeModal();
 });
 btnPracticeClose?.addEventListener('click', () => {
@@ -3557,6 +3610,19 @@ btnPracticeSave?.addEventListener('click', () => {
 });
 btnPracticeRepeat?.addEventListener('click', () => {
   repeatPractice();
+});
+
+document.getElementById('btnIgtMeasure')?.addEventListener('click', async () => {
+  if (!baseUrl) {
+    alert('Сначала подключитесь к ESP32');
+    return;
+  }
+  try {
+    await loadIgtModule();
+    window.OxyIgt?.open();
+  } catch (e) {
+    alert(`ИГТ: ${e.message}`);
+  }
 });
 
 btnFlowDynamics?.addEventListener('click', () => {
@@ -3633,6 +3699,7 @@ window.addEventListener('resize', () => {
   if (isCpOpen()) drawCpCharts();
   if (isPracticeOpen()) drawPracticeCharts();
   window.OxyHrv?.onResize();
+  window.OxyIgt?.onResize();
 });
 
 updateTrendsHint();

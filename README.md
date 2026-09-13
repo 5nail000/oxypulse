@@ -11,7 +11,7 @@ Android-клиент (`android/`) — **в последнем приоритет
 | Путь | Назначение | Приоритет |
 |---|---|---|
 | [`firmwares/`](firmwares/) | Все прошивки (main, ble, common, alone) | |
-| [`firmwares/firmware_main_devkit/`](firmwares/firmware_main_devkit/) | ESP32-DEVKIT: WiFi, HTTP API, I2C, клапан, HRV, тренды | **основной** |
+| [`firmwares/firmware_main_devkit/`](firmwares/firmware_main_devkit/) | ESP32-DEVKIT: WiFi, HTTP API, I2C, клапаны, HRV, ИГТ, тренды | **основной** |
 | [`firmwares/firmware_ble_s3/`](firmwares/firmware_ble_s3/) | ESP32-S3-N16R8: BLE central (Wellue, COOSPO) → UART | **основной** |
 | [`firmwares/firmware_ble_devkit/`](firmwares/firmware_ble_devkit/) | Вторая ESP32-DEVKIT: BLE central → UART | альтернатива S3 |
 | [`firmwares/firmware_common/`](firmwares/firmware_common/) | UART NDJSON, snapshot-структуры, logger | |
@@ -62,10 +62,11 @@ APK: `android/app/build/outputs/apk/debug/app-debug.apk`. На сплите — 
 
 ## Железо (кратко)
 
-- **Главный узел:** ESP32-DEVKIT CH340 — I2C, WiFi, клапан GPIO26
+- **Главный узел:** ESP32-DEVKIT CH340 — I2C, WiFi, 6 клапанов (GPIO 13–14, 21, 25–27), мотор O₂ (33), Servo1 (D4/GPIO 4)
+- **Концентратор O₂ (стенд):** вход **18 л/мин** → **16 л/мин** обеднённого + **0,9 л/мин** O₂ ([`docs/HARDWARE.md`](docs/HARDWARE.md))
 - **BLE-узел:** ESP32-S3-N16R8 или вторая ESP32-DEVKIT — Wellue / COOSPO, без WiFi
 - **UART:** 921600, прямая коммутация **GPIO16↔16**, **GPIO17↔17**
-- **I2C гипоксия (O₂ + давление):** SDA=GPIO22, SCL=GPIO23 (DevKit)
+- **I2C буферы гипоксии/гипероксии (O₂ + давление):** SDA=GPIO22, SCL=GPIO23 (DevKit)
 - **I2C рабочий (O₂, давление, поток, CO₂):** SDA=GPIO18, SCL=GPIO19 (DevKit)
 - **I2C-датчики:** ADS1115+AO-02 (`0x48`), DPS310 (`0x76`/`0x77`) — на обеих шинах; SFM3300 (`0x40`) и SCD41 (`0x62`) — только рабочий
 
@@ -80,5 +81,5 @@ JSON over HTTP (`/api/status`, `/api/cmd`) с главного узла.
 
 1. E2E на двух платах: UART `sensors.bridge.ok`, затем Wellue/COOSPO/HRV
 2. Калибровка O₂ (`O2_HYPOXIA_*` / `O2_WORKING_*` в `firmwares/firmware_main_devkit/src/config.h`)
-3. Логика клапана по порогам CO₂ / SpO₂ / ЧСС
+3. FSM шести клапанов + автоматика по порогам CO₂ / SpO₂ / ЧСС
 4. Android — по мере необходимости, после firmware + web

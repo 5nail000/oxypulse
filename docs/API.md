@@ -43,8 +43,13 @@ STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`. �
 | POST | `/api/hrv/start` | Старт записи R-R (`{"duration_sec":30\|120\|180\|300}`) |
 | POST | `/api/hrv/stop` | Отмена HRV-сессии |
 | GET | `/api/hrv` | Статус сессии; массив `rr` только в `done` |
+| POST | `/api/igt/prep` | Старт подготовки ИГТ |
+| POST | `/api/igt/start` | Старт циклов из `ready` |
+| POST | `/api/igt/abort` | Прервать + безопасное OFF |
+| POST | `/api/igt/ack` | Сброс `done`/`aborted`/`error` в `idle` |
+| GET | `/api/igt` | Полный снимок ИГТ (фазы, таймеры) |
 
-Статика UI: `/`, `/app.js`, `/style.css` (LittleFS из [`web/`](../web/), прошивка [`firmwares/firmware_main_devkit/`](../firmwares/firmware_main_devkit/)).
+Статика UI: `/`, `/app.js`, `/style.css`, `/hrv.js`, `/igt.js` (LittleFS из [`web/`](../web/), прошивка [`firmwares/firmware_main_devkit/`](../firmwares/firmware_main_devkit/)).
 
 ---
 
@@ -58,6 +63,7 @@ STATUS — JSON как `GET /api/status`. CMD — JSON как `POST /api/cmd`. �
 | `servos` | array | `[{pin, angle, auto}]` |
 | `whitelist` | array | Разрешённые GPIO |
 | `sensors` | object | I2C + BLE. Группы `hypoxia` / `working` + плоские алиасы |
+| `igt` | object | Компактный статус ИГТ (см. ниже) |
 
 Корневые `sensors.o2` / `sensors.pressure` — **буфер гипоксии**.  
 `sensors.flow` / `sensors.co2` — **рабочий контур** (дублируются в `sensors.working`).
@@ -151,6 +157,25 @@ UART к BLE-узлу (только сплит `firmware_main_devkit`). Веб м
 
 Булевы: `o2` (гипоксия), `pressure` (гипоксия), `flow`, `co2`, `work_o2`, `work_pressure`, `wellue`, `hr`, `rr`.
 
+### `igt` (компактный статус)
+
+| Поле | Тип | Описание |
+|---|---|---|
+| `state` | string | `idle` \| `check_sensors` \| `prime` \| `primary_fill` \| `recirculate` \| `ready` \| `hypoxia` \| `normoxia` \| `done` \| `aborted` \| `error` |
+| `phase` | string | `prep` \| `hypoxia` \| `normoxia` \| `""` |
+| `name` | string | имя протокола |
+| `cycle`, `cycles` | int | текущий цикл (1-based в практике) и всего |
+| `hypoxia_sec`, `normoxia_sec` | int | длительности фаз |
+| `phase_remain_sec` | int | обратный отсчёт текущей фазы/шага |
+| `o2_target` | float | целевой % O₂ буфера гипоксии |
+| `ready_to_start` | bool | можно слать `/api/igt/start` |
+| `sensor_warn` | bool | нет обязательных датчиков во время практики (фазы не стопаются) |
+| `buffer_prep` | string | `idle` \| `prime` \| `primary_fill` \| `recirculate` \| `ready` — параллельная подготовка буфера гипоксии во время нормоксии (кроме последнего цикла) |
+| `buffer_prep_remain_sec` | int | обратный отсчёт шага `buffer_prep` (наполнение / рециркуляция) |
+| `waiting_buffer` | bool | таймер нормоксии истёк, но буфер ещё не готов — переход в гипоксию отложен |
+| `practice_started_esp_ms` | int | `millis()` старта циклов |
+| `error` | string | только при `error` |
+
 ---
 
 ## Команды (`POST /api/cmd`)
@@ -158,13 +183,15 @@ UART к BLE-узлу (только сплит `firmware_main_devkit`). Веб м
 ```json
 {"cmd":"ping"}
 {"cmd":"gpio_set","pin":26,"state":1}
-{"cmd":"gpio_tap","pin":26}
-{"cmd":"gpio_tap","pin":26,"pulse_ms":3000}
-{"cmd":"servo_set","pin":25,"angle":90}
-{"cmd":"servo_auto","pin":25,"enabled":true,"pause_ms":5000}
+{"cmd":"gpio_tap","pin":26,"pulse_ms":500}
+{"cmd":"servo_set","pin":4,"angle":90}
+{"cmd":"servo_auto","pin":4,"enabled":true,"pause_ms":5000}
+{"cmd":"gpio_set","pin":33,"state":1}
 {"cmd":"flow_reset"}
 {"cmd":"co2_frc","target_ppm":400}
 ```
+
+Клапаны (active HIGH, NC): **V1=25**, **V2=26**, **V3=27**, **V4=13**, **V5=14**, **V6=21**; **O2_MOTOR=33**. **Servo1=4** (D4) — только `servo_*`, не `gpio_set`. Логика — [`HARDWARE.md`](HARDWARE.md).
 
 `co2_frc` — Forced Recalibration: датчик должен 3+ минуты работать в известной среде (обычно 400 ppm, свежий воздух). Команда останавливает periodic mode, пишет в EEPROM датчика и запускает измерения снова.
 
@@ -211,6 +238,36 @@ ASC (Automatic Self-Calibration) — только через флаг сборк
 | `rr` | только `state=done` — массив интервалов в мс |
 
 Клиент считает SDNN, rMSSD, pNN50, SD1/SD2 и рисует Poincaré. Минимум **15** интервалов после фильтрации артефактов. Краткий обрыв BLE до **10 с** не прерывает запись.
+
+---
+
+## ИГТ (`/api/igt`)
+
+Автомат подготовки буфера гипоксии и интервалов гипоксия/нормоксия живёт на ESP32. Обрыв WiFi **не** останавливает процесс.
+
+`POST /api/igt/prep`:
+
+```json
+{"name":"Гипоксия/Нормоксия на каждый день","o2_target":15,"hypoxia_sec":360,"normoxia_sec":300,"cycles":6}
+```
+
+Лимиты: O₂ 9–19%, фазы 60–900 с, циклы 1–12. Повторный `prep` разрешён из `idle` / `done` / `aborted` / `error`. Во время активного процесса — `409 busy`.
+
+Порядок подготовки: проверка датчиков (O₂ и давление гипоксии, поток рабочего контура) → V1 + мотор, ждать падение давления на `IGT_PRESSURE_DROP_HPA` → V4 + мотор `IGT_PRIMARY_FILL_SEC` → рециркуляция V1+V4 до `o2_target` → мотор/клапаны OFF, Servo1 = 180°, `ready`.
+
+`POST /api/igt/start` — только из `ready` (иначе `not_ready`). Циклы: гипоксия (Servo1 180°) → нормоксия (0°). После **последней** нормоксии серва остаётся на 0°, `done`.
+
+В каждой **нормоксии, кроме последнего цикла**, параллельно с отсчётом фазы идёт подготовка буфера для следующей гипоксии: опорожнение (V1 + мотор, контроль по давлению) → наполнение (V4 + мотор) → рециркуляция (V1+V4) до `o2_target`. Если таймер нормоксии истёк раньше готовности буфера — `waiting_buffer=true`, `state` остаётся `normoxia`, гипоксия начинается только когда `buffer_prep=ready`.
+
+`POST /api/igt/abort` — безопасное OFF (мотор, V1, V4) и Servo1 = 0°.
+
+`POST /api/igt/ack` — сброс терминального состояния в `idle` (иначе `not_terminal`).
+
+`GET /api/igt` — как `status.igt` плюс `fill_remain_sec`, `pressure_start_hpa`, `o2_now`, `pressure_now`, `phases:[{kind,cycle,start_esp_ms}]`.
+
+Пока `state ≠ idle`, ручные `gpio_set` / `gpio_tap` / `servo_*` на V1 (25), V4 (13), O2_MOTOR (33), Servo1 (4) отклоняются.
+
+Конфиг: `IGT_*` в [`firmware_main_devkit/platformio.ini`](../firmwares/firmware_main_devkit/platformio.ini).
 
 ---
 

@@ -95,6 +95,10 @@ bool gpioSet(uint8_t pin, bool state) {
         logPrintf("GPIO: pin %u не разрешён", pin);
         return false;
     }
+    if (pin == SERVO1_PIN) {
+        logPrintf("GPIO: pin %u занят Servo1 (PWM)", pin);
+        return false;
+    }
 
     GpioEntry *entry = allocEntry(pin);
     if (entry == nullptr) {
@@ -117,6 +121,10 @@ bool gpioTap(uint8_t pin, uint32_t pulse_ms) {
 
     if (!gpioIsPinAllowed(pin)) {
         logPrintf("GPIO: pin %u не разрешён", pin);
+        return false;
+    }
+    if (pin == SERVO1_PIN) {
+        logPrintf("GPIO: pin %u занят Servo1 (PWM)", pin);
         return false;
     }
 

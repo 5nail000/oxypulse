@@ -2,7 +2,7 @@
 
 | Папка | Плата | Назначение |
 |-------|-------|------------|
-| [`firmware_main_devkit/`](firmware_main_devkit/) | ESP32-DEVKIT CH340 | WiFi, HTTP, I2C, клапан, HRV |
+| [`firmware_main_devkit/`](firmware_main_devkit/) | ESP32-DEVKIT CH340 | WiFi, HTTP, I2C, клапаны, HRV, ИГТ |
 | [`firmware_ble_s3/`](firmware_ble_s3/) | ESP32-S3-N16R8 | BLE central → UART |
 | [`firmware_ble_devkit/`](firmware_ble_devkit/) | ESP32-DEVKIT CH340 | BLE central → UART (вторая DevKit) |
 | [`firmware_common/`](firmware_common/) | — | UART NDJSON, logger, snapshot-структуры |

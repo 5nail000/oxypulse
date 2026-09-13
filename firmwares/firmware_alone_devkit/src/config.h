@@ -42,9 +42,11 @@ constexpr size_t MAX_GPIO_TRACKED = 16;
 constexpr uint32_t GPIO_TAP_MS = 3000;
 constexpr uint32_t GPIO_TAP_MAX_MS = 10000;
 
+constexpr uint8_t SERVO1_PIN = 4;
+
 // Разрешённые выходные GPIO (ESP32 DevKit)
 static constexpr uint8_t GPIO_WHITELIST[] = {
-    13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33,
+    4, 13, 14, 16, 17, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33,
 };
 constexpr size_t GPIO_WHITELIST_SIZE = sizeof(GPIO_WHITELIST) / sizeof(GPIO_WHITELIST[0]);
 

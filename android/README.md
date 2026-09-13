@@ -12,7 +12,7 @@ API — [`docs/API.md`](../docs/API.md).
 
 - **WiFi**: HTTP к AP `192.168.4.1` или STA IP ESP32
 - **BLE**: GATT `ESP32-Tester` — **только** [`firmware_alone_devkit/`](../firmwares/firmware_alone_devkit/); на сплите — WiFi
-- Диалоги **GPIO** (ON/OFF, tap 3 с) и **Servo** (угол, авто 0↔180)
+- Диалоги **GPIO** (ON/OFF, tap) и **Servo** (угол, авто 0↔180)
 - **Wellue Ring O2 S** и **COOSPO H6M** из JSON (ESP32 подключается сам)
 
 ## Сборка
@@ -66,7 +66,7 @@ TesterViewModel
 | STATUS | `a1b2c3d4-e5f6-7890-abcd-ef1234567891` |
 | CMD | `a1b2c3d4-e5f6-7890-abcd-ef1234567892` |
 
-Тест клапана: GPIO **26** (не 22/23 — I2C).
+Клапаны V1–V6: GPIO **25, 26, 27, 13, 14, 21**; мотор O₂ **33**; Servo1 **D4/GPIO 4**. Не 22/23/18/19 — I²C.
 
 ## Стек
 

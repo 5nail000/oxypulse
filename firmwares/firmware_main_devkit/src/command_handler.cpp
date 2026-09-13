@@ -9,6 +9,7 @@
 #include "config.h"
 #include "dps310.h"
 #include "gpio_controller.h"
+#include "igt_session.h"
 #include "logger.h"
 #include "servo_controller.h"
 #include "scd41.h"
@@ -29,6 +30,10 @@ bool handleGpioSet(JsonVariantConst doc) {
         return false;
     }
     const bool state = doc["state"].as<int>() != 0;
+    if (igtSessionBlocksManual(pin)) {
+        logPrintf("GPIO: pin %u занят ИГТ", pin);
+        return false;
+    }
     return gpioSet(pin, state);
 }
 
@@ -37,6 +42,10 @@ bool handleGpioTap(JsonVariantConst doc) {
         return false;
     }
     const uint8_t pin = doc["pin"].as<uint8_t>();
+    if (igtSessionBlocksManual(pin)) {
+        logPrintf("GPIO: tap pin %u занят ИГТ", pin);
+        return false;
+    }
     uint32_t pulse_ms = GPIO_TAP_MS;
     if (doc["pulse_ms"].is<uint32_t>() || doc["pulse_ms"].is<int>()) {
         pulse_ms = doc["pulse_ms"].as<uint32_t>();
@@ -53,6 +62,10 @@ bool handleServoSet(JsonVariantConst doc) {
     }
     const uint8_t pin = doc["pin"].as<uint8_t>();
     const uint8_t angle = doc["angle"].as<uint8_t>();
+    if (igtSessionBlocksManual(pin)) {
+        logPrintf("servo: pin %u занят ИГТ", pin);
+        return false;
+    }
     return servoSetAngle(pin, angle);
 }
 
@@ -61,6 +74,10 @@ bool handleServoAuto(JsonVariantConst doc) {
         return false;
     }
     const uint8_t pin = doc["pin"].as<uint8_t>();
+    if (igtSessionBlocksManual(pin)) {
+        logPrintf("servo auto: pin %u занят ИГТ", pin);
+        return false;
+    }
     const bool enabled = doc["enabled"].is<bool>() ? doc["enabled"].as<bool>()
                                                      : doc["enabled"].as<int>() != 0;
     uint32_t pause_ms = SERVO_AUTO_PAUSE_MS;
@@ -71,6 +88,40 @@ bool handleServoAuto(JsonVariantConst doc) {
 }
 
 }  // namespace
+
+void fillIgtJson(JsonObject obj, const IgtPublicStatus &igt, bool include_phases) {
+    obj["state"] = igt.state;
+    obj["phase"] = igt.phase;
+    obj["name"] = igt.name;
+    obj["cycle"] = igt.cycle;
+    obj["cycles"] = igt.cycles;
+    obj["hypoxia_sec"] = igt.hypoxia_sec;
+    obj["normoxia_sec"] = igt.normoxia_sec;
+    obj["phase_remain_sec"] = igt.phase_remain_sec;
+    obj["o2_target"] = igt.o2_target;
+    obj["ready_to_start"] = igt.ready_to_start;
+    obj["sensor_warn"] = igt.sensor_warn;
+    obj["buffer_prep"] = igt.buffer_prep;
+    obj["buffer_prep_remain_sec"] = igt.buffer_prep_remain_sec;
+    obj["waiting_buffer"] = igt.waiting_buffer;
+    obj["practice_started_esp_ms"] = igt.practice_started_esp_ms;
+    if (igt.error[0] != '\0') {
+        obj["error"] = igt.error;
+    }
+    if (include_phases) {
+        obj["fill_remain_sec"] = igt.fill_remain_sec;
+        obj["pressure_start_hpa"] = igt.pressure_start_hpa;
+        obj["o2_now"] = igt.o2_now;
+        obj["pressure_now"] = igt.pressure_now;
+        JsonArray phases = obj["phases"].to<JsonArray>();
+        for (size_t i = 0; i < igt.phase_count; ++i) {
+            JsonObject mark = phases.add<JsonObject>();
+            mark["kind"] = igt.phases[i].kind == 0 ? "hypoxia" : "normoxia";
+            mark["cycle"] = igt.phases[i].cycle;
+            mark["start_esp_ms"] = igt.phases[i].start_esp_ms;
+        }
+    }
+}
 
 bool parseCommandJson(const char *json, size_t len) {
     if (json == nullptr || len == 0 || len >= CMD_JSON_MAX) {
@@ -272,6 +323,10 @@ size_t buildStatusJson(char *buffer, size_t capacity) {
     sources["rr"] = (trend_mask & TREND_SRC_RR) != 0;
     sources["work_o2"] = (trend_mask & TREND_SRC_WORK_O2) != 0;
     sources["work_pressure"] = (trend_mask & TREND_SRC_WORK_PRESSURE) != 0;
+
+    IgtPublicStatus igt{};
+    igtSessionGetStatus(&igt);
+    fillIgtJson(doc["igt"].to<JsonObject>(), igt, false);
 
     const size_t len = serializeJson(doc, buffer, capacity);
     return len;

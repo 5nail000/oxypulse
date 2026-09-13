@@ -11,6 +11,7 @@
 #include "command_handler.h"
 #include "config.h"
 #include "hrv_session.h"
+#include "igt_session.h"
 #include "logger.h"
 #include "trend_buffer.h"
 #include "wifi_sta.h"
@@ -24,6 +25,8 @@ char g_wifi_scan_buffer[WIFI_SCAN_JSON_MAX];
 char g_wifi_cmd_buffer[WIFI_CMD_JSON_MAX];
 char g_trend_src_buffer[TREND_SRC_JSON_MAX];
 char g_hrv_cmd_buffer[HRV_CMD_JSON_MAX];
+char g_igt_cmd_buffer[IGT_CMD_JSON_MAX];
+char g_igt_json_buffer[IGT_JSON_MAX];
 
 bool httpChunkSink(const char *data, size_t len) {
     if (len == 0 || data == nullptr) {
@@ -280,6 +283,113 @@ void handleHrvStop() {
     g_server.send(200, "application/json", "{\"ok\":true}");
 }
 
+void handleIgtPrep() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    const String body = g_server.arg("plain");
+    if (body.isEmpty()) {
+        g_server.send(400, "application/json", "{\"error\":\"empty_body\"}");
+        return;
+    }
+    const size_t copy_len =
+        body.length() < (IGT_CMD_JSON_MAX - 1) ? body.length() : (IGT_CMD_JSON_MAX - 1);
+    body.substring(0, copy_len).toCharArray(g_igt_cmd_buffer, IGT_CMD_JSON_MAX);
+
+    JsonDocument doc;
+    const DeserializationError err = deserializeJson(doc, g_igt_cmd_buffer, copy_len);
+    if (err) {
+        logPrintf("IGT: prep JSON error: %s", err.c_str());
+        g_server.send(400, "application/json", "{\"error\":\"bad_json\"}");
+        return;
+    }
+    const char *name = doc["name"] | "IGT";
+    if (!doc["o2_target"].is<float>() && !doc["o2_target"].is<int>() &&
+        !doc["o2_target"].is<double>()) {
+        g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+        return;
+    }
+    if (!doc["hypoxia_sec"].is<uint32_t>() && !doc["hypoxia_sec"].is<int>()) {
+        g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+        return;
+    }
+    if (!doc["normoxia_sec"].is<uint32_t>() && !doc["normoxia_sec"].is<int>()) {
+        g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+        return;
+    }
+    if (!doc["cycles"].is<uint8_t>() && !doc["cycles"].is<int>()) {
+        g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+        return;
+    }
+    const float o2_target = doc["o2_target"].as<float>();
+    const uint32_t hypoxia_sec = doc["hypoxia_sec"].as<uint32_t>();
+    const uint32_t normoxia_sec = doc["normoxia_sec"].as<uint32_t>();
+    const uint8_t cycles = doc["cycles"].as<uint8_t>();
+    if (!igtProtocolValid(o2_target, hypoxia_sec, normoxia_sec, cycles)) {
+        g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+        return;
+    }
+    if (!igtSessionPrep(name, o2_target, hypoxia_sec, normoxia_sec, cycles)) {
+        g_server.send(409, "application/json", "{\"error\":\"busy\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtStart() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    if (!igtSessionStart()) {
+        g_server.send(400, "application/json", "{\"error\":\"not_ready\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtAbort() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    if (!igtSessionAbort()) {
+        g_server.send(503, "application/json", "{\"error\":\"busy\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtAck() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    if (!igtSessionAck()) {
+        g_server.send(400, "application/json", "{\"error\":\"not_terminal\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtGet() {
+    if (g_server.method() != HTTP_GET) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    IgtPublicStatus igt{};
+    igtSessionGetStatus(&igt);
+    JsonDocument doc;
+    fillIgtJson(doc.to<JsonObject>(), igt, true);
+    const size_t len = serializeJson(doc, g_igt_json_buffer, sizeof(g_igt_json_buffer));
+    if (len == 0) {
+        g_server.send(500, "application/json", "{\"error\":\"igt_failed\"}");
+        return;
+    }
+    g_server.send(200, "application/json", g_igt_json_buffer);
+}
+
 void handleHrvGet() {
     if (g_server.method() != HTTP_GET) {
         g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
@@ -404,6 +514,11 @@ void wifiServerInit() {
     g_server.on("/api/hrv/start", HTTP_POST, handleHrvStart);
     g_server.on("/api/hrv/stop", HTTP_POST, handleHrvStop);
     g_server.on("/api/hrv", HTTP_GET, handleHrvGet);
+    g_server.on("/api/igt/prep", HTTP_POST, handleIgtPrep);
+    g_server.on("/api/igt/start", HTTP_POST, handleIgtStart);
+    g_server.on("/api/igt/abort", HTTP_POST, handleIgtAbort);
+    g_server.on("/api/igt/ack", HTTP_POST, handleIgtAck);
+    g_server.on("/api/igt", HTTP_GET, handleIgtGet);
     g_server.onNotFound([]() {
         if (g_server.uri().startsWith("/api/")) {
             g_server.send(404, "application/json", "{\"error\":\"not_found\"}");
@@ -413,6 +528,7 @@ void wifiServerInit() {
     });
 
     hrvSessionInit();
+    igtSessionInit();
 
     g_server.begin();
     logPrintf("HTTP server started on port 80");
@@ -423,6 +539,7 @@ void wifiServerLoop() {
     trendBufferPoll();
     const CoospoSnapshot coospo = bleSensorsGetCoospo();
     hrvSessionPoll(coospo.connected);
+    igtSessionPoll();
     for (uint8_t i = 0; i < 4; i += 1) {
         g_server.handleClient();
         yield();

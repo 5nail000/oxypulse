@@ -36,13 +36,23 @@ constexpr size_t MAX_GPIO_TRACKED = 16;
 constexpr uint32_t GPIO_TAP_MS = 3000;
 constexpr uint32_t GPIO_TAP_MAX_MS = 10000;
 
+// Исполнители — docs/HARDWARE.md. GPIO 4 только PWM (Servo1), не gpio_set.
+constexpr uint8_t SERVO1_PIN = 4;
+constexpr uint8_t VALVE_IN_HYPO_PIN = 25;
+constexpr uint8_t VALVE_IN_HYPER_PIN = 26;
+constexpr uint8_t VALVE_IN_WORK_PIN = 27;
+constexpr uint8_t VALVE_OUT_DEP_HYPO_PIN = 13;
+constexpr uint8_t VALVE_OUT_DEP_HYPER_PIN = 14;
+constexpr uint8_t VALVE_OUT_RICH_HYPER_PIN = 21;
+constexpr uint8_t O2_MOTOR_PIN = 33;
+
 // Разрешённые выходные GPIO (ESP32 DevKit). 16/17 заняты UART-мостом к BLE-узлу.
 static constexpr uint8_t GPIO_WHITELIST[] = {
-    13, 14, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33,
+    4, 13, 14, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33,
 };
 constexpr size_t GPIO_WHITELIST_SIZE = sizeof(GPIO_WHITELIST) / sizeof(GPIO_WHITELIST[0]);
 
-constexpr size_t STATUS_JSON_MAX = 6144;
+constexpr size_t STATUS_JSON_MAX = 7680;
 constexpr size_t CMD_JSON_MAX = 256;
 constexpr size_t TREND_SRC_JSON_MAX = 384;
 
@@ -159,3 +169,41 @@ constexpr size_t HRV_ERROR_MAX = 48;
 constexpr size_t HRV_RR_PER_NOTIFY_MAX = 16;
 constexpr size_t HRV_JSON_CHUNK = 512;
 constexpr size_t STATIC_FILE_CHUNK = 1024;
+
+#ifndef IGT_PRESSURE_DROP_HPA
+#define IGT_PRESSURE_DROP_HPA 10
+#endif
+#ifndef IGT_PRIMARY_FILL_SEC
+#define IGT_PRIMARY_FILL_SEC 120
+#endif
+#ifndef IGT_PRESSURE_WAIT_SEC
+#define IGT_PRESSURE_WAIT_SEC 60
+#endif
+#ifndef IGT_RECIRC_TIMEOUT_SEC
+#define IGT_RECIRC_TIMEOUT_SEC 600
+#endif
+#ifndef IGT_SERVO_HYPOXIA_DEG
+#define IGT_SERVO_HYPOXIA_DEG 180
+#endif
+#ifndef IGT_SERVO_NORMOXIA_DEG
+#define IGT_SERVO_NORMOXIA_DEG 0
+#endif
+
+constexpr float IGT_PRESSURE_DROP_HPA_F = static_cast<float>(IGT_PRESSURE_DROP_HPA);
+constexpr uint32_t IGT_PRIMARY_FILL_MS = static_cast<uint32_t>(IGT_PRIMARY_FILL_SEC) * 1000U;
+constexpr uint32_t IGT_PRESSURE_WAIT_MS = static_cast<uint32_t>(IGT_PRESSURE_WAIT_SEC) * 1000U;
+constexpr uint32_t IGT_RECIRC_TIMEOUT_MS = static_cast<uint32_t>(IGT_RECIRC_TIMEOUT_SEC) * 1000U;
+constexpr uint8_t IGT_SERVO_HYPOXIA_ANGLE = static_cast<uint8_t>(IGT_SERVO_HYPOXIA_DEG);
+constexpr uint8_t IGT_SERVO_NORMOXIA_ANGLE = static_cast<uint8_t>(IGT_SERVO_NORMOXIA_DEG);
+
+constexpr float IGT_O2_TARGET_MIN = 9.0f;
+constexpr float IGT_O2_TARGET_MAX = 19.0f;
+constexpr uint32_t IGT_PHASE_SEC_MIN = 60;
+constexpr uint32_t IGT_PHASE_SEC_MAX = 900;
+constexpr uint8_t IGT_CYCLES_MIN = 1;
+constexpr uint8_t IGT_CYCLES_MAX = 12;
+constexpr size_t IGT_NAME_MAX = 80;
+constexpr size_t IGT_ERROR_MAX = 48;
+constexpr size_t IGT_PHASE_MARK_MAX = 24;
+constexpr size_t IGT_CMD_JSON_MAX = 384;
+constexpr size_t IGT_JSON_MAX = 3072;

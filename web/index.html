@@ -154,6 +154,7 @@
         <button type="button" id="btnHrvMeasure" disabled>Замерить HRV</button>
         <button type="button" id="btnCpMeasure">Замер КП Бутейко</button>
         <button type="button" id="btnPracticeMeasure">Практика Бутейко на Тренажёре</button>
+        <button type="button" id="btnIgtMeasure">ИГТ</button>
       </div>
       <p class="muted" id="actionsHint"></p>
     </section>
@@ -490,7 +491,141 @@
     </div>
   </div>
 
+  <div id="igtModal" class="modal" hidden aria-hidden="true">
+    <div class="modal-backdrop" id="igtModalBackdrop"></div>
+    <div class="modal-panel card igt-panel" role="dialog" aria-labelledby="igtModalTitle">
+      <div class="modal-head">
+        <h2 id="igtModalTitle">ИГТ</h2>
+        <button type="button" id="btnIgtClose" class="btn-secondary btn-compact">Закрыть</button>
+      </div>
+      <div id="igtPhaseBar" class="igt-phase-bar" hidden>
+        <p id="igtPhaseBadge" class="igt-phase-badge">—</p>
+        <p id="igtCountdown" class="igt-timer">—</p>
+        <p id="igtStatusText" class="muted"></p>
+      </div>
+
+      <div id="igtStepSetup">
+        <label>Протокол
+          <select id="igtProtocolSelect"></select>
+        </label>
+        <p id="igtProtocolMeta" class="muted igt-protocol-meta"></p>
+        <div id="igtCustomForm" class="igt-custom-form" hidden>
+          <label>Название <input id="igtCustomName" type="text" maxlength="64" placeholder="Мой протокол"></label>
+          <label>O₂ буфера гипоксии, % <input id="igtCustomO2" type="number" min="9" max="19" step="0.1" value="15"></label>
+          <label>Гипоксия, мин <input id="igtCustomHypoxia" type="number" min="1" max="15" step="1" value="6"></label>
+          <label>Нормоксия, мин <input id="igtCustomNormoxia" type="number" min="1" max="15" step="1" value="5"></label>
+          <label>Циклы <input id="igtCustomCycles" type="number" min="1" max="12" step="1" value="6"></label>
+          <div class="btn-row">
+            <button type="button" id="btnIgtCustomSave" class="btn-secondary">Сохранить протокол</button>
+            <button type="button" id="btnIgtCustomDelete" class="btn-secondary">Удалить</button>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="button" id="btnIgtCustomNew" class="btn-secondary">Новый протокол</button>
+        </div>
+        <ul id="igtWarnings" class="igt-warnings"></ul>
+        <p id="igtBlockers" class="igt-blockers" hidden></p>
+      </div>
+
+      <div id="igtStepSession" class="igt-body" hidden>
+        <p id="igtEmptyHint" class="muted">Графики появятся по живым датчикам</p>
+        <article class="chart-panel" id="igtPanelO2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">O₂ · гипоксия</span>
+            <span class="chart-now" id="igtO2Now">—</span>
+          </div>
+          <canvas id="igtChartO2"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelPressure" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Давление · гипоксия</span>
+            <span class="chart-now" id="igtPressureNow">—</span>
+          </div>
+          <canvas id="igtChartPressure"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelFlow" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Минутная вентиляция</span>
+            <span class="chart-now" id="igtFlowNow">—</span>
+          </div>
+          <canvas id="igtChartFlow"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelFlowDyn" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Поток</span>
+            <span class="chart-now" id="igtFlowDynNow">—</span>
+          </div>
+          <canvas id="igtChartFlowDyn"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelWorkO2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">O₂ · рабочий</span>
+            <span class="chart-now" id="igtWorkO2Now">—</span>
+          </div>
+          <canvas id="igtChartWorkO2"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelWorkPressure" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Давление · рабочий</span>
+            <span class="chart-now" id="igtWorkPressureNow">—</span>
+          </div>
+          <canvas id="igtChartWorkPressure"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelCo2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">CO₂ · рабочий</span>
+            <span class="chart-now" id="igtCo2Now">—</span>
+          </div>
+          <canvas id="igtChartCo2"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelSpo2" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">Сатурация (кольцо)</span>
+            <span class="chart-now" id="igtSpo2Now">—</span>
+          </div>
+          <canvas id="igtChartSpo2"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelHr" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">HR</span>
+            <span class="chart-now" id="igtHrNow">—</span>
+          </div>
+          <canvas id="igtChartHr"></canvas>
+        </article>
+        <article class="chart-panel" id="igtPanelRr" hidden>
+          <div class="chart-meta">
+            <span class="chart-title">R-R</span>
+            <span class="chart-now" id="igtRrNow">—</span>
+          </div>
+          <canvas id="igtChartRr"></canvas>
+        </article>
+      </div>
+
+      <div id="igtReview" hidden>
+        <p id="igtReviewText" class="muted">—</p>
+        <textarea id="igtComment" class="hrv-comment" rows="2" maxlength="280" placeholder="Комментарий (необязательно)"></textarea>
+      </div>
+
+      <div id="igtConfirmAbort" class="igt-confirm" hidden>
+        <p>Прервать практику? Клапаны и мотор выключатся, Servo1 уйдёт в нормоксию.</p>
+        <div class="btn-row">
+          <button type="button" id="btnIgtAbortYes">Прервать</button>
+          <button type="button" id="btnIgtAbortNo" class="btn-secondary">Отмена</button>
+        </div>
+      </div>
+
+      <div class="btn-row igt-actions">
+        <button type="button" id="btnIgtPrepare">Подготовка</button>
+        <button type="button" id="btnIgtStart" hidden disabled>Начать практику</button>
+        <button type="button" id="btnIgtAbort" class="btn-secondary" hidden>Прервать</button>
+        <button type="button" id="btnIgtSave" class="btn-secondary" hidden>Сохранить снимок</button>
+        <button type="button" id="btnIgtAgain" class="btn-secondary" hidden>К протоколам</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/app.js"></script>
   <script src="/hrv.js"></script>
+  <script src="/igt.js"></script>
 </body>
 </html>

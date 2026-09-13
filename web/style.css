@@ -670,3 +670,83 @@ button.btn-secondary:disabled:hover { background: #374151; }
   padding-top: 12px;
   border-top: 1px solid #333;
 }
+
+.igt-panel {
+  max-width: 720px;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(92dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.igt-panel .modal-head h2 {
+  font-size: 1.05rem;
+  line-height: 1.25;
+}
+.igt-phase-bar {
+  text-align: center;
+  margin: 0 0 8px;
+}
+.igt-phase-badge {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #ddd;
+}
+.igt-phase-badge.hypoxia { color: #fb923c; }
+.igt-phase-badge.normoxia { color: #86efac; }
+.igt-phase-badge.prep { color: #93c5fd; }
+.igt-timer {
+  font-size: 2.4rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.1;
+  margin: 4px 0 0;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+.igt-protocol-meta {
+  margin: 6px 0 10px;
+}
+.igt-custom-form {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+.igt-warnings {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.igt-warnings li {
+  color: #fbbf24;
+  font-size: 0.9rem;
+  margin: 4px 0;
+}
+.igt-blockers {
+  color: #f87171;
+  margin: 8px 0 0;
+}
+.igt-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.igt-panel .chart-panel {
+  margin-top: 10px;
+}
+.igt-panel .chart-panel canvas {
+  height: 112px;
+}
+.igt-actions {
+  flex-shrink: 0;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #333;
+}
+.igt-confirm {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #7f1d1d;
+  border-radius: 8px;
+  background: #1f1212;
+}

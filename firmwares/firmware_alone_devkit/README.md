@@ -29,7 +29,7 @@ UI берётся из [`web/`](../../web/) автоматически (`board_b
 
 - **I2C гипоксия:** SDA=GPIO**22**, SCL=GPIO**23**
 - **I2C рабочий:** SDA=GPIO**18**, SCL=GPIO**19**
-- **Клапан (тест):** GPIO **26**, активный HIGH
+- **Клапаны V1–V6:** GPIO **25, 26, 27, 13, 14, 21** (см. [`docs/HARDWARE.md`](../../docs/HARDWARE.md))
 - **BLE-имя:** `ESP32-Tester`
 - **WiFi AP:** `ESP32-Tester` / `12345678` / `192.168.4.1`
 
