@@ -11,6 +11,7 @@ const CHART_REDRAW_MS_LIGHT = 400;
 const CHART_REDRAW_MS_HEAVY = 800;
 const GPIO_TAP_PULSE_MS = 250;
 const GPIO_TAP_COOLDOWN_MS = 6000;
+const O2_MOTOR_GPIO = 33;
 const CHART_MAX_SEC = 4500;
 const TRENDS_FETCH_TIMEOUT_MS = 5000;
 const TRENDS_PAGE = 240;
@@ -564,11 +565,25 @@ function setPanelHidden(id, hidden) {
   if (el) el.hidden = hidden;
 }
 
+function isMotorGpioPin() {
+  return Number(gpioPin.value) === O2_MOTOR_GPIO;
+}
+
+function updateGpioPinMode() {
+  const motor = isMotorGpioPin();
+  btnGpioApply.hidden = motor;
+  btnGpioApply.disabled = motor;
+  gpioState.disabled = motor;
+  btnGpioTap.textContent = motor ? 'Переключить мотор' : 'Тапнуть';
+}
+
 function setGpioUiState(on, { pulsing = false } = {}) {
   gpioState.checked = on;
   gpioStateLabel.classList.toggle('pulse', pulsing);
   if (pulsing) {
     gpioStateLabel.textContent = 'ON · импульс';
+  } else if (isMotorGpioPin()) {
+    gpioStateLabel.textContent = on ? 'ON (лог.)' : 'OFF (лог.)';
   } else {
     gpioStateLabel.textContent = on ? 'ON' : 'OFF';
   }
@@ -591,6 +606,7 @@ function fillPinSelects(pins, preserveSelection = true) {
 }
 
 fillPinSelects(DEFAULT_PINS, false);
+updateGpioPinMode();
 
 servoAngle.addEventListener('input', () => {
   angleValue.textContent = servoAngle.value;
@@ -614,6 +630,7 @@ for (const el of formControls) {
 }
 
 gpioPin.addEventListener('change', () => {
+  updateGpioPinMode();
   if (lastStatus) syncGpioForm(lastStatus);
 });
 
@@ -3456,6 +3473,7 @@ async function cooldownTapButton(ms) {
 btnGpioTap.addEventListener('click', async () => {
   if (btnGpioTap.disabled) return;
 
+  const motor = isMotorGpioPin();
   btnGpioTap.disabled = true;
   gpioSyncLocked = true;
   gpioState.disabled = true;
@@ -3467,22 +3485,30 @@ btnGpioTap.addEventListener('click', async () => {
       pin: Number(gpioPin.value),
       pulse_ms: GPIO_TAP_PULSE_MS,
     });
-    setGpioUiState(true, { pulsing: true });
-    btnGpioTap.textContent = 'Тап…';
+    if (motor) {
+      btnGpioTap.textContent = 'Импульс…';
+      await sleep(GPIO_TAP_PULSE_MS);
+      await poll({ syncForm: true });
+    } else {
+      setGpioUiState(true, { pulsing: true });
+      btnGpioTap.textContent = 'Тап…';
 
-    await sleep(GPIO_TAP_PULSE_MS);
-    setGpioUiState(false);
-    btnGpioTap.textContent = 'OFF…';
+      await sleep(GPIO_TAP_PULSE_MS);
+      setGpioUiState(false);
+      btnGpioTap.textContent = 'OFF…';
 
-    await cooldownTapButton(GPIO_TAP_COOLDOWN_MS);
+      await cooldownTapButton(GPIO_TAP_COOLDOWN_MS);
+    }
   } catch (e) {
     alert(`GPIO tap: ${e.message}`);
   } finally {
-    gpioState.disabled = false;
+    updateGpioPinMode();
     gpioSyncLocked = false;
     btnGpioTap.textContent = tapLabel;
     renderLinkBar();
-    await poll({ syncForm: true });
+    if (!motor) {
+      await poll({ syncForm: true });
+    }
   }
 });
 

@@ -8,18 +8,18 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.oxypulse.esp32tester.domain.TransportType
 import com.oxypulse.esp32tester.ui.ConnectScreen
-import com.oxypulse.esp32tester.ui.TesterScreen
+import com.oxypulse.esp32tester.ui.DashboardScreen
 import com.oxypulse.esp32tester.ui.TesterViewModel
+import com.oxypulse.esp32tester.ui.theme.Bg
+import com.oxypulse.esp32tester.ui.theme.OxyTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -34,21 +34,14 @@ class MainActivity : ComponentActivity() {
         requestBlePermissions()
 
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            OxyTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = Bg) {
                     val viewModel: TesterViewModel = hiltViewModel()
-                    var connected by remember { mutableStateOf(false) }
-
-                    if (connected) {
-                        TesterScreen(
-                            viewModel = viewModel,
-                            onDisconnect = { connected = false },
-                        )
+                    val transport by viewModel.transport.collectAsStateWithLifecycle()
+                    if (transport == TransportType.None) {
+                        ConnectScreen(viewModel)
                     } else {
-                        ConnectScreen(
-                            viewModel = viewModel,
-                            onConnected = { connected = true },
-                        )
+                        DashboardScreen(viewModel)
                     }
                 }
             }
@@ -63,6 +56,9 @@ class MainActivity : ComponentActivity() {
         }
         if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
             permissions += Manifest.permission.ACCESS_FINE_LOCATION
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions += Manifest.permission.POST_NOTIFICATIONS
         }
         val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED

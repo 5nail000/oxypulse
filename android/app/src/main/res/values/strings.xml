@@ -1,3 +1,6 @@
 <resources>
-    <string name="app_name">ESP32 Tester</string>
+    <string name="app_name">OxyPulse</string>
+    <string name="ble_fg_channel">OxyPulse BLE</string>
+    <string name="ble_fg_title">OxyPulse</string>
+    <string name="ble_fg_text">ЦУ и датчики BLE</string>
 </resources>

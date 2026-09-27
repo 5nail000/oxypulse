@@ -1,26 +1,27 @@
 # OxyPulse
 
 Портативная система мониторинга и управления замкнутым дыхательным контуром:
-две ESP32 + датчики на I2C + веб-интерфейс (основной клиент).
+датчики I2C, клапаны, ИГТ; UI на телефоне или на стендовом вебе.
 
-**На текущем этапе:** основная работа в **`firmwares/firmware_main_devkit/`** + BLE-узел (`firmware_ble_s3` или `firmware_ble_devkit`) + **`web/`**.  
-Android-клиент (`android/`) — **в последнем приоритете**; на сплите используйте **WiFi HTTP**.
+**Поле (этот срез):** CH340 = ЦУ клапанов (`firmware_valve_devkit`, BLE `OxyPulse-CU`) + Android (UI, Wellue, COOSPO).  
+**Стенд / откат:** `firmware_main_devkit` + веб + BLE-узел S3 — не ломаем.
 
 ## Структура репозитория
 
 | Путь | Назначение | Приоритет |
 |---|---|---|
 | [`firmwares/`](firmwares/) | Все прошивки (main, ble, common, alone) | |
-| [`firmwares/firmware_main_devkit/`](firmwares/firmware_main_devkit/) | ESP32-DEVKIT: WiFi, HTTP API, I2C, клапаны, HRV, ИГТ, тренды | **основной** |
+| [`firmwares/firmware_valve_devkit/`](firmwares/firmware_valve_devkit/) | ESP32-DEVKIT: ЦУ клапанов, I²C, ИГТ, BLE `OxyPulse-CU` | **поле** |
+| [`firmwares/firmware_main_devkit/`](firmwares/firmware_main_devkit/) | ESP32-DEVKIT: WiFi, HTTP API, I2C, клапаны, HRV, ИГТ, тренды | **стенд** |
 | [`firmwares/firmware_ble_s3/`](firmwares/firmware_ble_s3/) | ESP32-S3-N16R8: BLE central (Wellue, COOSPO) → UART | **основной** |
 | [`firmwares/firmware_ble_devkit/`](firmwares/firmware_ble_devkit/) | Вторая ESP32-DEVKIT: BLE central → UART | альтернатива S3 |
 | [`firmwares/firmware_common/`](firmwares/firmware_common/) | UART NDJSON, snapshot-структуры, logger | |
 | [`firmwares/firmware_alone_devkit/`](firmwares/firmware_alone_devkit/) | Монолит на одной ESP32 (откат, не развиваем) | архив |
-| [`web/`](web/) | Веб-UI (Vanilla JS); LittleFS с `firmware_main_devkit` | **основной** |
+| [`web/`](web/) | Веб-UI сплита main (не полевой клиент этой схемы) | стенд |
 | [`docs/API.md`](docs/API.md) | HTTP API, JSON status, команды | |
 | [`docs/HARDWARE.md`](docs/HARDWARE.md) | Распиновка, I²C, UART-мост, датчики, BLE, питание | |
 | [`web/README.md`](web/README.md) | Веб-UI, тренды, WiFi-настройка | |
-| [`android/`](android/) | Android-клиент (WiFi HTTP; GATT только на `firmware_alone_devkit`) | низкий |
+| [`android/`](android/) | Полевой UI: GATT ЦУ + Wellue/COOSPO; WiFi HTTP — откат на main | **поле** |
 | [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) | Цели, архитектура, дорожная карта | |
 | [`TESTING.md`](TESTING.md) | Проверка на железе | |
 
@@ -51,14 +52,26 @@ pio device monitor
 
 Подробнее — [`firmwares/firmware_main_devkit/README.md`](firmwares/firmware_main_devkit/README.md), [`firmwares/firmware_ble_s3/README.md`](firmwares/firmware_ble_s3/README.md), [`firmwares/firmware_ble_devkit/README.md`](firmwares/firmware_ble_devkit/README.md), [`web/README.md`](web/README.md).
 
-### Android (опционально)
+### Поле: ЦУ + Android
+
+```bash
+cd firmwares/firmware_valve_devkit
+pio run -t upload
+
+cd ../../android
+gradlew.bat assembleDebug
+```
+
+Телефон: вкладка **ЦУ**, скан `OxyPulse-CU`. S3 можно выключить. См. [`android/README.md`](android/README.md), [`docs/API.md`](docs/API.md).
+
+### Android (стенд / HTTP)
 
 ```bash
 cd android
 gradlew.bat assembleDebug
 ```
 
-APK: `android/app/build/outputs/apk/debug/app-debug.apk`. На сплите — **только WiFi HTTP**. См. [`android/README.md`](android/README.md).
+APK: `android/app/build/outputs/apk/debug/app-debug.apk`. Вкладка **Стенд WiFi** — HTTP к `firmware_main_devkit`.
 
 ## Железо (кратко)
 

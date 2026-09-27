@@ -491,6 +491,52 @@
     </div>
   </div>
 
+  <div id="igtProtocolModal" class="modal modal-nested" hidden aria-hidden="true">
+    <div class="modal-backdrop" id="igtProtocolModalBackdrop"></div>
+    <div class="modal-panel card igt-sub-panel" role="dialog" aria-labelledby="igtProtocolModalTitle">
+      <div class="modal-head">
+        <h2 id="igtProtocolModalTitle">Протокол ИГТ</h2>
+        <button type="button" id="btnIgtProtocolClose" class="btn-secondary btn-compact">Закрыть</button>
+      </div>
+      <div id="igtCustomForm" class="igt-custom-form">
+        <label>Название <input id="igtCustomName" type="text" maxlength="64" placeholder="Мой протокол"></label>
+        <label>O₂ буфера гипоксии, % <input id="igtCustomO2" type="number" min="9" max="19" step="0.1" value="15"></label>
+        <label>Гипоксия, мин <input id="igtCustomHypoxia" type="number" min="1" max="15" step="1" value="6"></label>
+        <label>Нормоксия, мин <input id="igtCustomNormoxia" type="number" min="1" max="15" step="1" value="5"></label>
+        <label>Циклы <input id="igtCustomCycles" type="number" min="1" max="12" step="1" value="6"></label>
+      </div>
+      <p id="igtProtocolFormError" class="igt-blockers" hidden></p>
+      <div class="btn-row">
+        <button type="button" id="btnIgtCustomNew" class="btn-secondary">Новый</button>
+        <button type="button" id="btnIgtCustomSave">Сохранить</button>
+        <button type="button" id="btnIgtCustomDelete" class="btn-secondary">Удалить</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="igtTestModal" class="modal modal-nested" hidden aria-hidden="true">
+    <div class="modal-backdrop" id="igtTestModalBackdrop"></div>
+    <div class="modal-panel card igt-sub-panel" role="dialog" aria-labelledby="igtTestModalTitle">
+      <div class="modal-head">
+        <h2 id="igtTestModalTitle">Тест-драйв</h2>
+        <button type="button" id="btnIgtTestClose" class="btn-secondary btn-compact">Закрыть</button>
+      </div>
+      <p class="muted">Отдельные шаги подготовки буфера. Доступно только когда ИГТ в состоянии idle.</p>
+      <div id="igtTestActions" class="igt-test-actions">
+        <button type="button" class="btn-secondary igt-test-btn" data-action="hypo_evac">Опустошение буфера гипоксии (V1)</button>
+        <button type="button" class="btn-secondary igt-test-btn" data-action="hyper_evac">Опустошение буфера гипероксии (V2)</button>
+        <button type="button" class="btn-secondary igt-test-btn" data-action="work_flush">Продувка рабочего контура (V3)</button>
+        <button type="button" class="btn-secondary igt-test-btn" data-action="hypo_fill">Первичное заполнение буфера гипоксии (V4)</button>
+        <button type="button" class="btn-secondary igt-test-btn" data-action="hypo_recirculate">Рециркуляция гипоксии до 15% O₂ (V1+V4)</button>
+      </div>
+      <p id="igtTestStatus" class="igt-test-status muted">—</p>
+      <p id="igtTestTimer" class="igt-timer igt-test-timer">—</p>
+      <div class="btn-row">
+        <button type="button" id="btnIgtTestStop" class="btn-secondary" hidden>Остановить</button>
+      </div>
+    </div>
+  </div>
+
   <div id="igtModal" class="modal" hidden aria-hidden="true">
     <div class="modal-backdrop" id="igtModalBackdrop"></div>
     <div class="modal-panel card igt-panel" role="dialog" aria-labelledby="igtModalTitle">
@@ -509,19 +555,9 @@
           <select id="igtProtocolSelect"></select>
         </label>
         <p id="igtProtocolMeta" class="muted igt-protocol-meta"></p>
-        <div id="igtCustomForm" class="igt-custom-form" hidden>
-          <label>Название <input id="igtCustomName" type="text" maxlength="64" placeholder="Мой протокол"></label>
-          <label>O₂ буфера гипоксии, % <input id="igtCustomO2" type="number" min="9" max="19" step="0.1" value="15"></label>
-          <label>Гипоксия, мин <input id="igtCustomHypoxia" type="number" min="1" max="15" step="1" value="6"></label>
-          <label>Нормоксия, мин <input id="igtCustomNormoxia" type="number" min="1" max="15" step="1" value="5"></label>
-          <label>Циклы <input id="igtCustomCycles" type="number" min="1" max="12" step="1" value="6"></label>
-          <div class="btn-row">
-            <button type="button" id="btnIgtCustomSave" class="btn-secondary">Сохранить протокол</button>
-            <button type="button" id="btnIgtCustomDelete" class="btn-secondary">Удалить</button>
-          </div>
-        </div>
         <div class="btn-row">
-          <button type="button" id="btnIgtCustomNew" class="btn-secondary">Новый протокол</button>
+          <button type="button" id="btnIgtProtocolEdit" class="btn-secondary">Создать / редактировать протокол</button>
+          <button type="button" id="btnIgtTestDrive" class="btn-secondary">Тест-драйв действий</button>
         </div>
         <ul id="igtWarnings" class="igt-warnings"></ul>
         <p id="igtBlockers" class="igt-blockers" hidden></p>
@@ -615,8 +651,9 @@
       </div>
 
       <div class="btn-row igt-actions">
-        <button type="button" id="btnIgtPrepare">Подготовка</button>
-        <button type="button" id="btnIgtStart" hidden disabled>Начать практику</button>
+        <button type="button" id="btnIgtStart" disabled>Начать практику</button>
+        <button type="button" id="btnIgtPrepare" class="btn-secondary">Подготовка</button>
+        <button type="button" id="btnIgtSkipBufferPrep" class="btn-secondary" hidden>Пропустить переподготовку гипоксии</button>
         <button type="button" id="btnIgtAbort" class="btn-secondary" hidden>Прервать</button>
         <button type="button" id="btnIgtSave" class="btn-secondary" hidden>Сохранить снимок</button>
         <button type="button" id="btnIgtAgain" class="btn-secondary" hidden>К протоколам</button>

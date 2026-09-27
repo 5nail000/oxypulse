@@ -30,7 +30,7 @@ UI берётся из [`web/`](../../web/) (`data_dir = ../../web` в `platform
 
 - **I2C буферы гипоксии/гипероксии:** SDA=GPIO**22**, SCL=GPIO**23** (датчики обоих буферов, разные адреса)
 - **I2C рабочий:** SDA=GPIO**18**, SCL=GPIO**19**
-- **Клапаны V1–V6:** GPIO **25, 26, 27, 13, 14, 21** (active HIGH)
+- **Клапаны V1–V6:** GPIO **25, 26, 27, 13, 14, 21** — полярность реле: `GPIO_VALVE_ACTIVE_LOW` в `platformio.ini` (сейчас **1** = active LOW)
 - **Мотор концентратора O₂:** GPIO **33**
 - **Servo1** (гипоксия/гипероксия): **D4** = GPIO **4**
 - **UART к S3:** GPIO**16** RX ← S3 TX, GPIO**17** TX → S3 RX, общая GND
@@ -61,9 +61,11 @@ UI берётся из [`web/`](../../web/) (`data_dir = ../../web` в `platform
 | `SCD41_CO2_TRUST` | `70` | Доверие к lead-поправке, % (70 = 0.7 как в MVP) |
 | `SCD41_CO2_COMP_MAX_DELTA_PPM` | `15000` | Макс. коррекция CO₂ за шаг, ppm |
 | `SCD41_ASC_ENABLED` | `0` | ASC чипа: `1` = вкл (открытый воздух), `0` = выкл (маска/контур) |
-| `IGT_PRESSURE_DROP_HPA` | `10` | Падение давления буфера гипоксии (hPa от старта мотора), после которого начинается наполнение |
+| `IGT_PRESSURE_DROP_HPA` | `10` | Падение P_гипо от **baseline** (hPa) — завершение выкачки |
+| `IGT_WORK_PRESSURE_DELTA_HPA` | `3` | P_раб − P_гипо ≥ порога — альтернативное завершение выкачки |
+| `IGT_PRESSURE_BASELINE_LIMIT_HPA` | `25` | Аварийный стоп подготовки: P ниже своего baseline на этот порог (гипо или раб.) |
 | `IGT_PRIMARY_FILL_SEC` | `120` | Длительность первичного наполнения буфера гипоксии |
-| `IGT_PRESSURE_WAIT_SEC` | `60` | Таймаут ожидания падения давления |
+| `IGT_PRESSURE_WAIT_SEC` | `60` | Таймаут выкачки буфера |
 | `IGT_RECIRC_TIMEOUT_SEC` | `600` | Таймаут рециркуляции до целевого O₂ |
 | `IGT_SERVO_HYPOXIA_DEG` | `180` | Servo1 в фазе гипоксии |
 | `IGT_SERVO_NORMOXIA_DEG` | `0` | Servo1 в нормоксии / после abort / после последнего цикла |

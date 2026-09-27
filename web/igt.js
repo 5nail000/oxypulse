@@ -23,6 +23,14 @@
     builtin: true,
   };
 
+  const TEST_ACTIONS = {
+    hypo_evac: 'Опустошение буфера гипоксии (V1)',
+    hyper_evac: 'Опустошение буфера гипероксии (V2)',
+    work_flush: 'Продувка рабочего контура (V3)',
+    hypo_fill: 'Первичное заполнение буфера гипоксии (V4)',
+    hypo_recirculate: 'Рециркуляция буфера гипоксии до 15% O₂ (V1+V4)',
+  };
+
   const SESSION_SOURCES = { o2: true, pressure: true, flow: true };
 
   const deps = () => window.__oxy || {};
@@ -49,14 +57,27 @@
   const igtCustomHypoxia = document.getElementById('igtCustomHypoxia');
   const igtCustomNormoxia = document.getElementById('igtCustomNormoxia');
   const igtCustomCycles = document.getElementById('igtCustomCycles');
+  const igtProtocolModal = document.getElementById('igtProtocolModal');
+  const igtProtocolModalBackdrop = document.getElementById('igtProtocolModalBackdrop');
+  const btnIgtProtocolClose = document.getElementById('btnIgtProtocolClose');
+  const btnIgtProtocolEdit = document.getElementById('btnIgtProtocolEdit');
+  const igtProtocolFormError = document.getElementById('igtProtocolFormError');
   const btnIgtCustomNew = document.getElementById('btnIgtCustomNew');
   const btnIgtCustomSave = document.getElementById('btnIgtCustomSave');
   const btnIgtCustomDelete = document.getElementById('btnIgtCustomDelete');
+  const igtTestModal = document.getElementById('igtTestModal');
+  const igtTestModalBackdrop = document.getElementById('igtTestModalBackdrop');
+  const btnIgtTestClose = document.getElementById('btnIgtTestClose');
+  const btnIgtTestDrive = document.getElementById('btnIgtTestDrive');
+  const btnIgtTestStop = document.getElementById('btnIgtTestStop');
+  const igtTestStatus = document.getElementById('igtTestStatus');
+  const igtTestTimer = document.getElementById('igtTestTimer');
   const igtWarnings = document.getElementById('igtWarnings');
   const igtBlockers = document.getElementById('igtBlockers');
   const igtEmptyHint = document.getElementById('igtEmptyHint');
   const btnIgtPrepare = document.getElementById('btnIgtPrepare');
   const btnIgtStart = document.getElementById('btnIgtStart');
+  const btnIgtSkipBufferPrep = document.getElementById('btnIgtSkipBufferPrep');
   const btnIgtAbort = document.getElementById('btnIgtAbort');
   const btnIgtSave = document.getElementById('btnIgtSave');
   const btnIgtAgain = document.getElementById('btnIgtAgain');
@@ -81,7 +102,7 @@
   let uiStep = 'setup';
   let lastIgt = null;
   let selectedId = BUILTIN.id;
-  let creatingCustom = false;
+  let protocolEditorNew = false;
   let shown = emptyShown();
   let history = emptyHistory();
   let windowSec = 300;
@@ -212,20 +233,74 @@
 
   function syncProtocolForm() {
     const p = selectedProtocol();
-    creatingCustom = !p.builtin && !!igtCustomForm && !igtCustomForm.hidden
-      ? creatingCustom
-      : false;
     if (igtProtocolMeta) igtProtocolMeta.textContent = protocolMeta(p);
-    const showForm = !p.builtin || creatingCustom;
-    if (igtCustomForm) igtCustomForm.hidden = !showForm;
-    if (showForm) {
-      if (igtCustomName) igtCustomName.value = p.builtin ? '' : p.name;
-      if (igtCustomO2) igtCustomO2.value = String(p.o2_target);
-      if (igtCustomHypoxia) igtCustomHypoxia.value = String(p.hypoxia_min);
-      if (igtCustomNormoxia) igtCustomNormoxia.value = String(p.normoxia_min);
-      if (igtCustomCycles) igtCustomCycles.value = String(p.cycles);
+  }
+
+  function loadProtocolEditor(p, isNew = false) {
+    protocolEditorNew = isNew;
+    const src = p || BUILTIN;
+    if (igtCustomName) igtCustomName.value = isNew ? '' : (src.builtin ? '' : src.name);
+    if (igtCustomO2) igtCustomO2.value = String(src.o2_target);
+    if (igtCustomHypoxia) igtCustomHypoxia.value = String(src.hypoxia_min);
+    if (igtCustomNormoxia) igtCustomNormoxia.value = String(src.normoxia_min);
+    if (igtCustomCycles) igtCustomCycles.value = String(src.cycles);
+    if (btnIgtCustomDelete) btnIgtCustomDelete.hidden = isNew || src.builtin;
+    if (igtProtocolFormError) igtProtocolFormError.hidden = true;
+  }
+
+  function openProtocolModal() {
+    if (!igtProtocolModal) return;
+    const p = selectedProtocol();
+    loadProtocolEditor(p, false);
+    igtProtocolModal.hidden = false;
+    igtProtocolModal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeProtocolModal() {
+    if (!igtProtocolModal) return;
+    igtProtocolModal.hidden = true;
+    igtProtocolModal.setAttribute('aria-hidden', 'true');
+    protocolEditorNew = false;
+  }
+
+  function openTestModal() {
+    if (!igtTestModal) return;
+    igtTestModal.hidden = false;
+    igtTestModal.setAttribute('aria-hidden', 'false');
+    updateTestModal(lastIgt);
+  }
+
+  function closeTestModal() {
+    if (!igtTestModal) return;
+    igtTestModal.hidden = true;
+    igtTestModal.setAttribute('aria-hidden', 'true');
+  }
+
+  function closeNestedModals() {
+    closeProtocolModal();
+    closeTestModal();
+  }
+
+  function updateTestModal(igt) {
+    if (!igtTestModal || igtTestModal.hidden) return;
+    const running = firmwareTest(igt);
+    const busy = firmwareBusy(igt) && !running;
+    document.querySelectorAll('.igt-test-btn').forEach((btn) => {
+      btn.disabled = running || busy;
+    });
+    if (btnIgtTestStop) btnIgtTestStop.hidden = !running;
+    if (igtTestStatus) {
+      if (running) {
+        igtTestStatus.textContent = TEST_ACTIONS[igt?.test_action] || 'Выполняется…';
+      } else if (busy) {
+        igtTestStatus.textContent = 'ИГТ занят — дождитесь состояния idle';
+      } else {
+        igtTestStatus.textContent = 'Выберите действие';
+      }
     }
-    if (btnIgtCustomDelete) btnIgtCustomDelete.hidden = p.builtin;
+    if (igtTestTimer) {
+      igtTestTimer.textContent = running ? formatMmSs(igt?.phase_remain_sec) : '—';
+    }
   }
 
   function sensorsOf(data) {
@@ -248,7 +323,6 @@
     const errs = [];
     if (!s.hypoxiaO2.ok) errs.push('нет O₂ буфера гипоксии');
     if (!s.hypoxiaP.ok) errs.push('нет давления буфера гипоксии');
-    if (!s.flow.ok) errs.push('нет потока рабочего контура');
     return errs;
   }
 
@@ -279,11 +353,26 @@
       igtBlockers.hidden = blocks.length === 0;
       igtBlockers.textContent = blocks.length ? `Нельзя начать подготовку: ${blocks.join(', ')}` : '';
     }
-    if (btnIgtPrepare) btnIgtPrepare.disabled = blocks.length > 0 || !deps().getBaseUrl?.();
+    const busy = firmwareBusy(lastIgt);
+    const proto = selectedProtocol();
+    if (btnIgtStart) {
+      btnIgtStart.disabled = busy || !deps().getBaseUrl?.() || !proto?.name;
+    }
+    if (btnIgtPrepare) btnIgtPrepare.disabled = blocks.length > 0 || busy || !deps().getBaseUrl?.();
+    if (btnIgtProtocolEdit) btnIgtProtocolEdit.disabled = busy;
+    if (btnIgtTestDrive) btnIgtTestDrive.disabled = busy && !firmwareTest(lastIgt);
   }
 
   function firmwareIdle(igt) {
     return !igt || !igt.state || igt.state === 'idle';
+  }
+
+  function firmwareBusy(igt) {
+    return !firmwareIdle(igt);
+  }
+
+  function firmwareTest(igt) {
+    return igt?.state === 'test';
   }
 
   function firmwarePrep(igt) {
@@ -292,6 +381,13 @@
 
   function firmwareRun(igt) {
     return igt?.state === 'hypoxia' || igt?.state === 'normoxia';
+  }
+
+  function canSkipBufferPrep(igt) {
+    if (!igt || igt.state !== 'normoxia') return false;
+    if (Number(igt.cycle) >= Number(igt.cycles)) return false;
+    const bp = igt.buffer_prep || 'idle';
+    return bp === 'prime' || bp === 'primary_fill';
   }
 
   function firmwareReview(igt) {
@@ -303,7 +399,7 @@
   }
 
   function isLive() {
-    return firmwarePrep(lastIgt) || firmwareRun(lastIgt);
+    return firmwarePrep(lastIgt) || firmwareRun(lastIgt) || firmwareTest(lastIgt);
   }
 
   function captureShown() {
@@ -666,6 +762,18 @@
     }, 'image/png');
   }
 
+  function primeStatusText(s) {
+    const p = s.hypoxiaP.ok ? `${Number(s.hypoxiaP.hpa).toFixed(1)} hPa` : '—';
+    const wp = s.workP.ok ? `${Number(s.workP.hpa).toFixed(1)} hPa` : '—';
+    const fromBase = (s.hypoxiaP.ok && s.hypoxiaP.baseline_ok)
+      ? `${(Number(s.hypoxiaP.baseline_hpa) - Number(s.hypoxiaP.hpa)).toFixed(1)} hPa`
+      : '—';
+    const delta = (s.hypoxiaP.ok && s.workP.ok)
+      ? `${(Number(s.workP.hpa) - Number(s.hypoxiaP.hpa)).toFixed(1)} hPa`
+      : '—';
+    return `Выкачка буфера · гипо ${p} (от базы −${fromBase}), раб. ${wp}, Δ ${delta}`;
+  }
+
   function statusLine(igt, data) {
     if (!igt) return '';
     const s = sensorsOf(data);
@@ -675,7 +783,7 @@
       case 'check_sensors':
         return 'Проверка датчиков…';
       case 'prime':
-        return `Ждём падение давления на порог из конфига · сейчас ${p}`;
+        return primeStatusText(s);
       case 'primary_fill':
         return `Первичное наполнение буфера · осталось ${formatMmSs(igt.phase_remain_sec)}`;
       case 'recirculate':
@@ -690,7 +798,7 @@
         }
         const bp = igt.buffer_prep || 'idle';
         if (bp === 'prime') {
-          return `Нормоксия · опорожнение буфера (давление ${p})`;
+          return `Нормоксия · ${primeStatusText(s)}`;
         }
         if (bp === 'primary_fill') {
           return `Нормоксия · наполнение буфера · ${formatMmSs(igt.buffer_prep_remain_sec)}`;
@@ -711,6 +819,8 @@
         return 'Практика прервана';
       case 'error':
         return igt.error || 'Ошибка подготовки';
+      case 'test':
+        return TEST_ACTIONS[igt.test_action] || 'Тест-драйв';
       default:
         return '';
     }
@@ -730,11 +840,12 @@
 
     if (firmwarePrep(lastIgt)) uiStep = 'prep';
     else if (firmwareRun(lastIgt)) uiStep = 'run';
+    else if (firmwareTest(lastIgt)) uiStep = 'test';
     else if (firmwareReview(lastIgt)) uiStep = 'review';
     else if (firmwareIdle(lastIgt)) uiStep = 'setup';
 
     if (igtStepSetup) igtStepSetup.hidden = uiStep !== 'setup';
-    if (igtStepSession) igtStepSession.hidden = uiStep === 'setup';
+    if (igtStepSession) igtStepSession.hidden = uiStep === 'setup' || uiStep === 'test';
     if (igtReview) igtReview.hidden = uiStep !== 'review';
     if (igtPhaseBar) igtPhaseBar.hidden = uiStep === 'setup';
     if (igtConfirmAbort) igtConfirmAbort.hidden = igtConfirmAbort.hidden;
@@ -760,12 +871,15 @@
         igtPhaseBadge.textContent = 'Прервано';
       } else if (state === 'error') {
         igtPhaseBadge.textContent = 'Ошибка';
+      } else if (state === 'test') {
+        igtPhaseBadge.textContent = 'Тест-драйв';
+        igtPhaseBadge.classList.add('prep');
       } else {
         igtPhaseBadge.textContent = '—';
       }
     }
     if (igtCountdown) {
-      if (uiStep === 'prep' || uiStep === 'run') {
+      if (uiStep === 'prep' || uiStep === 'run' || uiStep === 'test') {
         if (lastIgt?.ready_to_start) {
           igtCountdown.textContent = 'готово';
         } else if (lastIgt?.waiting_buffer) {
@@ -796,10 +910,19 @@
 
     if (btnIgtPrepare) btnIgtPrepare.hidden = uiStep !== 'setup';
     if (btnIgtStart) {
-      btnIgtStart.hidden = uiStep !== 'prep';
-      btnIgtStart.disabled = !lastIgt?.ready_to_start;
+      btnIgtStart.hidden = !(uiStep === 'setup' || uiStep === 'prep');
+      if (uiStep === 'prep') {
+        btnIgtStart.disabled = !lastIgt?.ready_to_start;
+      } else if (uiStep === 'setup') {
+        const proto = selectedProtocol();
+        btnIgtStart.disabled = firmwareBusy(lastIgt) || !proto?.name || !deps().getBaseUrl?.();
+      }
     }
-    if (btnIgtAbort) btnIgtAbort.hidden = !(uiStep === 'prep' || uiStep === 'run');
+    if (btnIgtSkipBufferPrep) {
+      btnIgtSkipBufferPrep.hidden = !canSkipBufferPrep(lastIgt);
+    }
+    if (btnIgtAbort) btnIgtAbort.hidden = !(uiStep === 'prep' || uiStep === 'run' || uiStep === 'test');
+    updateTestModal(lastIgt);
     if (btnIgtSave) btnIgtSave.hidden = uiStep !== 'review';
     if (btnIgtAgain) btnIgtAgain.hidden = uiStep !== 'review';
     if (igtComment) igtComment.hidden = uiStep !== 'review';
@@ -831,24 +954,41 @@
     }
   }
 
+  async function startTest(action) {
+    if (!action || firmwareBusy(lastIgt) && !firmwareTest(lastIgt)) return;
+    try {
+      const body = { action };
+      if (action === 'hypo_recirculate') body.o2_target = 15;
+      await postIgt('/api/igt/test/start', body);
+      uiStep = 'test';
+      ensureSources();
+      applyChrome({ state: 'test', test_action: action, phase_remain_sec: 0 }, deps().getLastStatus?.());
+    } catch (e) {
+      if (igtTestStatus) igtTestStatus.textContent = `Ошибка: ${e.message}`;
+    }
+  }
+
+  async function stopTest() {
+    try {
+      await postIgt('/api/igt/test/stop');
+      if (firmwareTest(lastIgt)) lastIgt = { state: 'idle' };
+      uiStep = 'setup';
+      updateTestModal(lastIgt);
+      applyChrome(lastIgt, deps().getLastStatus?.());
+    } catch (e) {
+      if (igtTestStatus) igtTestStatus.textContent = `Остановка: ${e.message}`;
+    }
+  }
+
   async function startPrep() {
-    const formOpen = !!(igtCustomForm && !igtCustomForm.hidden);
-    const p = selectedProtocol();
-    const err = formOpen ? validateCustom() : null;
-    if (err) {
+    const proto = selectedProtocol();
+    if (!proto?.name) {
       if (igtBlockers) {
         igtBlockers.hidden = false;
-        igtBlockers.textContent = err;
+        igtBlockers.textContent = 'Выберите протокол или сохраните свой в редакторе';
       }
       return;
     }
-    const proto = formOpen ? {
-      name: igtCustomName.value.trim(),
-      o2_target: Number(igtCustomO2.value),
-      hypoxia_min: Number(igtCustomHypoxia.value),
-      normoxia_min: Number(igtCustomNormoxia.value),
-      cycles: Number(igtCustomCycles.value),
-    } : p;
     history = emptyHistory();
     practiceStartedAt = null;
     sessionEndedAt = null;
@@ -880,15 +1020,62 @@
     }
   }
 
+  function protocolPostBody(proto) {
+    return {
+      name: proto.name,
+      o2_target: proto.o2_target,
+      hypoxia_sec: proto.hypoxia_min * 60,
+      normoxia_sec: proto.normoxia_min * 60,
+      cycles: proto.cycles,
+    };
+  }
+
   async function startPractice() {
+    const proto = selectedProtocol();
+    if (!proto?.name) {
+      if (igtBlockers) {
+        igtBlockers.hidden = false;
+        igtBlockers.textContent = 'Выберите протокол';
+      }
+      return;
+    }
+    const direct = uiStep === 'setup' || firmwareIdle(lastIgt);
     try {
-      await postIgt('/api/igt/start');
+      windowSec = protocolWindowSec(proto, null);
+      ensureSources();
+      captureShown();
+      await postIgt('/api/igt/start', direct ? protocolPostBody(proto) : null);
       practiceStartedAt = Date.now();
       sessionEndedAt = null;
       history = emptyHistory();
       uiStep = 'run';
+      applyChrome({
+        state: 'hypoxia',
+        name: proto.name,
+        cycle: 1,
+        cycles: proto.cycles,
+        o2_target: proto.o2_target,
+        hypoxia_sec: proto.hypoxia_min * 60,
+        normoxia_sec: proto.normoxia_min * 60,
+        practice_started_esp_ms: Date.now(),
+      }, deps().getLastStatus?.());
     } catch (e) {
       if (igtStatusText) igtStatusText.textContent = `Старт: ${e.message}`;
+    }
+  }
+
+  async function skipBufferPrep() {
+    try {
+      await postIgt('/api/igt/buffer/skip-recirculate');
+      if (lastIgt) {
+        lastIgt = {
+          ...lastIgt,
+          buffer_prep: 'recirculate',
+        };
+        applyChrome(lastIgt, deps().getLastStatus?.());
+      }
+    } catch (e) {
+      if (igtStatusText) igtStatusText.textContent = `Пропуск: ${e.message}`;
     }
   }
 
@@ -936,6 +1123,10 @@
     if (!firmwareIdle(lastIgt)) {
       ensureSources();
       windowSec = protocolWindowSec(selectedProtocol(), lastIgt);
+      if (firmwareTest(lastIgt)) uiStep = 'test';
+      else if (firmwarePrep(lastIgt)) uiStep = 'prep';
+      else if (firmwareRun(lastIgt)) uiStep = 'run';
+      else if (firmwareReview(lastIgt)) uiStep = 'review';
       fetchIgtFull().then((full) => {
         if (full) lastIgt = { ...lastIgt, ...full };
         applyChrome(lastIgt, data);
@@ -953,6 +1144,7 @@
     igtModal.hidden = true;
     igtModal.setAttribute('aria-hidden', 'true');
     if (igtConfirmAbort) igtConfirmAbort.hidden = true;
+    closeNestedModals();
     maybeRestoreSources();
     deps().resumeMainCharts?.();
   }
@@ -960,7 +1152,8 @@
   function onStatus(data) {
     const igt = data?.igt;
     if (igt) lastIgt = { ...lastIgt, ...igt };
-    if (isOpen() && (uiStep === 'prep' || uiStep === 'run' || firmwarePrep(lastIgt) || firmwareRun(lastIgt))) {
+    if (isOpen() && (uiStep === 'prep' || uiStep === 'run' || uiStep === 'test'
+      || firmwarePrep(lastIgt) || firmwareRun(lastIgt) || firmwareTest(lastIgt))) {
       pushSample(data);
     }
     if (isOpen()) {
@@ -976,30 +1169,25 @@
 
     igtProtocolSelect?.addEventListener('change', () => {
       selectedId = igtProtocolSelect.value;
-      creatingCustom = false;
       syncProtocolForm();
     });
-    btnIgtCustomNew?.addEventListener('click', () => {
-      creatingCustom = true;
-      selectedId = BUILTIN.id;
-      if (igtProtocolSelect) igtProtocolSelect.value = BUILTIN.id;
-      if (igtCustomForm) igtCustomForm.hidden = false;
-      if (igtCustomName) igtCustomName.value = '';
-      if (btnIgtCustomDelete) btnIgtCustomDelete.hidden = true;
-    });
+    btnIgtProtocolEdit?.addEventListener('click', () => openProtocolModal());
+    btnIgtProtocolClose?.addEventListener('click', () => closeProtocolModal());
+    igtProtocolModalBackdrop?.addEventListener('click', () => closeProtocolModal());
+    btnIgtCustomNew?.addEventListener('click', () => loadProtocolEditor(BUILTIN, true));
     btnIgtCustomSave?.addEventListener('click', () => {
       const err = validateCustom();
       if (err) {
-        if (igtBlockers) {
-          igtBlockers.hidden = false;
-          igtBlockers.textContent = err;
+        if (igtProtocolFormError) {
+          igtProtocolFormError.hidden = false;
+          igtProtocolFormError.textContent = err;
         }
         return;
       }
       const list = loadCustoms();
-      const current = selectedProtocol();
+      const current = protocolEditorNew ? null : selectedProtocol();
       const item = {
-        id: current.builtin ? newId() : current.id,
+        id: protocolEditorNew || current?.builtin ? newId() : current.id,
         name: igtCustomName.value.trim(),
         o2_target: Number(igtCustomO2.value),
         hypoxia_min: Number(igtCustomHypoxia.value),
@@ -1011,17 +1199,27 @@
       else list.push(item);
       saveCustoms(list);
       selectedId = item.id;
-      creatingCustom = false;
+      protocolEditorNew = false;
       fillProtocolSelect();
+      closeProtocolModal();
     });
     btnIgtCustomDelete?.addEventListener('click', () => {
       const p = selectedProtocol();
-      if (p.builtin) return;
+      if (p.builtin || protocolEditorNew) return;
       saveCustoms(loadCustoms().filter((x) => x.id !== p.id));
       selectedId = BUILTIN.id;
       fillProtocolSelect();
+      closeProtocolModal();
+    });
+    btnIgtTestDrive?.addEventListener('click', () => openTestModal());
+    btnIgtTestClose?.addEventListener('click', () => closeTestModal());
+    igtTestModalBackdrop?.addEventListener('click', () => closeTestModal());
+    btnIgtTestStop?.addEventListener('click', () => stopTest());
+    document.querySelectorAll('.igt-test-btn').forEach((btn) => {
+      btn.addEventListener('click', () => startTest(btn.dataset.action));
     });
     btnIgtPrepare?.addEventListener('click', () => startPrep());
+    btnIgtSkipBufferPrep?.addEventListener('click', () => skipBufferPrep());
     btnIgtStart?.addEventListener('click', () => startPractice());
     btnIgtAbort?.addEventListener('click', () => {
       if (igtConfirmAbort) igtConfirmAbort.hidden = false;

@@ -1,4 +1,5 @@
 commit-message.txt
+firmwares/firmware_valve_devkit/src/hw/
 .idea/
 *.iml
 .gradle/

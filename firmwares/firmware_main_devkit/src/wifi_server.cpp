@@ -342,6 +342,52 @@ void handleIgtStart() {
         g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
         return;
     }
+    const String body = g_server.arg("plain");
+    if (!body.isEmpty()) {
+        const size_t copy_len =
+            body.length() < (IGT_CMD_JSON_MAX - 1) ? body.length() : (IGT_CMD_JSON_MAX - 1);
+        body.substring(0, copy_len).toCharArray(g_igt_cmd_buffer, IGT_CMD_JSON_MAX);
+
+        JsonDocument doc;
+        const DeserializationError err = deserializeJson(doc, g_igt_cmd_buffer, copy_len);
+        if (err) {
+            logPrintf("IGT: start JSON error: %s", err.c_str());
+            g_server.send(400, "application/json", "{\"error\":\"bad_json\"}");
+            return;
+        }
+        if (!doc["o2_target"].is<float>() && !doc["o2_target"].is<int>() &&
+            !doc["o2_target"].is<double>()) {
+            g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+            return;
+        }
+        if (!doc["hypoxia_sec"].is<uint32_t>() && !doc["hypoxia_sec"].is<int>()) {
+            g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+            return;
+        }
+        if (!doc["normoxia_sec"].is<uint32_t>() && !doc["normoxia_sec"].is<int>()) {
+            g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+            return;
+        }
+        if (!doc["cycles"].is<uint8_t>() && !doc["cycles"].is<int>()) {
+            g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+            return;
+        }
+        const char *name = doc["name"] | "IGT";
+        const float o2_target = doc["o2_target"].as<float>();
+        const uint32_t hypoxia_sec = doc["hypoxia_sec"].as<uint32_t>();
+        const uint32_t normoxia_sec = doc["normoxia_sec"].as<uint32_t>();
+        const uint8_t cycles = doc["cycles"].as<uint8_t>();
+        if (!igtProtocolValid(o2_target, hypoxia_sec, normoxia_sec, cycles)) {
+            g_server.send(400, "application/json", "{\"error\":\"invalid_protocol\"}");
+            return;
+        }
+        if (!igtSessionStartDirect(name, o2_target, hypoxia_sec, normoxia_sec, cycles)) {
+            g_server.send(409, "application/json", "{\"error\":\"busy\"}");
+            return;
+        }
+        g_server.send(200, "application/json", "{\"ok\":true}");
+        return;
+    }
     if (!igtSessionStart()) {
         g_server.send(400, "application/json", "{\"error\":\"not_ready\"}");
         return;
@@ -368,6 +414,84 @@ void handleIgtAck() {
     }
     if (!igtSessionAck()) {
         g_server.send(400, "application/json", "{\"error\":\"not_terminal\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtBufferSkipRecirculate() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    if (!igtSessionBufferSkipToRecirculate()) {
+        g_server.send(400, "application/json", "{\"error\":\"invalid_state\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtBufferFillContinue() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    if (!igtSessionBufferFillContinue()) {
+        g_server.send(400, "application/json", "{\"error\":\"invalid_state\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtBufferFillAbort() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    if (!igtSessionBufferFillAbort()) {
+        g_server.send(400, "application/json", "{\"error\":\"invalid_state\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtTestStart() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    const String body = g_server.arg("plain");
+    JsonDocument doc;
+    if (!body.isEmpty()) {
+        const size_t copy_len =
+            body.length() < (IGT_CMD_JSON_MAX - 1) ? body.length() : (IGT_CMD_JSON_MAX - 1);
+        body.substring(0, copy_len).toCharArray(g_igt_cmd_buffer, IGT_CMD_JSON_MAX);
+        const DeserializationError err = deserializeJson(doc, g_igt_cmd_buffer, copy_len);
+        if (err) {
+            g_server.send(400, "application/json", "{\"error\":\"bad_json\"}");
+            return;
+        }
+    }
+    const char *action = doc["action"] | "";
+    float o2_target = 15.0f;
+    if (doc["o2_target"].is<float>() || doc["o2_target"].is<int>() ||
+        doc["o2_target"].is<double>()) {
+        o2_target = doc["o2_target"].as<float>();
+    }
+    if (!igtSessionTestStart(action, o2_target)) {
+        g_server.send(409, "application/json", "{\"error\":\"busy\"}");
+        return;
+    }
+    g_server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void handleIgtTestStop() {
+    if (g_server.method() != HTTP_POST) {
+        g_server.send(405, "application/json", "{\"error\":\"method_not_allowed\"}");
+        return;
+    }
+    if (!igtSessionTestStop()) {
+        g_server.send(503, "application/json", "{\"error\":\"busy\"}");
         return;
     }
     g_server.send(200, "application/json", "{\"ok\":true}");
@@ -518,6 +642,11 @@ void wifiServerInit() {
     g_server.on("/api/igt/start", HTTP_POST, handleIgtStart);
     g_server.on("/api/igt/abort", HTTP_POST, handleIgtAbort);
     g_server.on("/api/igt/ack", HTTP_POST, handleIgtAck);
+    g_server.on("/api/igt/buffer/skip-recirculate", HTTP_POST, handleIgtBufferSkipRecirculate);
+    g_server.on("/api/igt/buffer/fill-continue", HTTP_POST, handleIgtBufferFillContinue);
+    g_server.on("/api/igt/buffer/fill-abort", HTTP_POST, handleIgtBufferFillAbort);
+    g_server.on("/api/igt/test/start", HTTP_POST, handleIgtTestStart);
+    g_server.on("/api/igt/test/stop", HTTP_POST, handleIgtTestStop);
     g_server.on("/api/igt", HTTP_GET, handleIgtGet);
     g_server.onNotFound([]() {
         if (g_server.uri().startsWith("/api/")) {

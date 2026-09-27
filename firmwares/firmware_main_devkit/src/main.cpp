@@ -3,6 +3,7 @@
 #include "ao02.h"
 #include "ble_sensors.h"
 #include "dps310.h"
+#include "gpio_controller.h"
 #include "i2c_bus.h"
 #include "logger.h"
 #include "servo_controller.h"
@@ -16,6 +17,8 @@ void setup() {
     delay(500);
 
     logPrintf("OxyPulse main starting, heap=%u", ESP.getFreeHeap());
+    valvesInit();
+    o2MotorInit();
     trendBufferInit();
 
     i2cBusInit();

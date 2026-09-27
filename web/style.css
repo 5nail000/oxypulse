@@ -712,6 +712,31 @@ button.btn-secondary:disabled:hover { background: #374151; }
   gap: 8px;
   margin: 8px 0 10px;
 }
+.modal-nested {
+  z-index: 1200;
+}
+.igt-sub-panel {
+  max-width: 420px;
+  width: calc(100% - 24px);
+}
+.igt-test-actions {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+.igt-test-actions .igt-test-btn {
+  text-align: left;
+  white-space: normal;
+  line-height: 1.35;
+}
+.igt-test-status {
+  margin: 8px 0 0;
+  min-height: 1.2em;
+}
+.igt-test-timer {
+  font-size: 1.6rem;
+  margin: 4px 0 8px;
+}
 .igt-warnings {
   list-style: none;
   margin: 10px 0 0;

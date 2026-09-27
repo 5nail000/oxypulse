@@ -104,6 +104,15 @@ void fillIgtJson(JsonObject obj, const IgtPublicStatus &igt, bool include_phases
     obj["buffer_prep"] = igt.buffer_prep;
     obj["buffer_prep_remain_sec"] = igt.buffer_prep_remain_sec;
     obj["waiting_buffer"] = igt.waiting_buffer;
+    obj["fill_timeout_pending"] = igt.fill_timeout_pending;
+    obj["last_phase_volume_ok"] = igt.last_phase_volume_ok;
+    if (igt.last_phase_volume_ok) {
+        obj["last_phase_inhale_l"] = igt.last_phase_inhale_l;
+        obj["last_phase_exhale_l"] = igt.last_phase_exhale_l;
+        obj["last_phase_kind"] = igt.last_phase_kind == 0 ? "hypoxia" : "normoxia";
+        obj["last_phase_cycle"] = igt.last_phase_cycle;
+    }
+    obj["test_action"] = igt.test_action;
     obj["practice_started_esp_ms"] = igt.practice_started_esp_ms;
     if (igt.error[0] != '\0') {
         obj["error"] = igt.error;
@@ -113,6 +122,7 @@ void fillIgtJson(JsonObject obj, const IgtPublicStatus &igt, bool include_phases
         obj["pressure_start_hpa"] = igt.pressure_start_hpa;
         obj["o2_now"] = igt.o2_now;
         obj["pressure_now"] = igt.pressure_now;
+        obj["work_pressure_now"] = igt.work_pressure_now;
         JsonArray phases = obj["phases"].to<JsonArray>();
         for (size_t i = 0; i < igt.phase_count; ++i) {
             JsonObject mark = phases.add<JsonObject>();

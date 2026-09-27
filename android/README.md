@@ -1,19 +1,19 @@
 # OxyPulse — Android
 
-Compose-приложение для HTTP API главного узла [`firmware_main_devkit/`](../firmwares/firmware_main_devkit/).
+Полевой клиент: BLE к ЦУ [`firmware_valve_devkit/`](../firmwares/firmware_valve_devkit/) плюс Wellue/COOSPO на телефоне.
 
-> **Приоритет на текущем этапе — последний.** Основная работа в
-> [`firmware_main_devkit/`](../firmwares/firmware_main_devkit/) + [`firmware_ble_s3/`](../firmwares/firmware_ble_s3/) (или [`firmware_ble_devkit/`](../firmwares/firmware_ble_devkit/)) + [`web/`](../web/).
-> На сплите используйте **WiFi HTTP**. BLE GATT есть только у монолита [`firmware_alone_devkit/`](../firmwares/firmware_alone_devkit/).
+Стендовый откат: WiFi HTTP к [`firmware_main_devkit/`](../firmwares/firmware_main_devkit/) (как веб [`web/`](../web/)). Веб — клиент сплита main, не полевой UI.
 
-API — [`docs/API.md`](../docs/API.md).
+Протокол ЦУ — [`docs/API.md`](../docs/API.md) (имя `OxyPulse-CU`, UUID `c0a10000-…`).
 
 ## Возможности
 
-- **WiFi**: HTTP к AP `192.168.4.1` или STA IP ESP32
-- **BLE**: GATT `ESP32-Tester` — **только** [`firmware_alone_devkit/`](../firmwares/firmware_alone_devkit/); на сплите — WiFi
-- Диалоги **GPIO** (ON/OFF, tap) и **Servo** (угол, авто 0↔180)
-- **Wellue Ring O2 S** и **COOSPO H6M** из JSON (ESP32 подключается сам)
+- **ЦУ (основное):** GATT LIVE/CMD, GPIO/Servo/ИГТ, keep-alive; кольцо и ремень на телефоне
+- **Стенд WiFi:** HTTP к AP `192.168.4.1` или STA IP; Wellue/COOSPO приходят из `/api/status` (S3)
+- Датчики I²C с ЦУ, GPIO / Servo / мотор O₂, сброс потока, FRC CO₂
+- Тренды: на ЦУ — локальное кольцо 1 Гц; на WiFi — ещё и `GET /api/trends`
+- **HRV:** на ЦУ — R-R с ремня на телефоне; на WiFi — `/api/hrv` на ESP
+- КП, практика Бутейко, **ИГТ** (prep/start/abort; обрыв GATT **не** abort на ESP, reconnect + запись в отчёт)
 
 ## Сборка
 
@@ -28,45 +28,36 @@ sdk.dir=C\:\\Users\\YourUser\\AppData\\Local\\Android\\Sdk
 ```bash
 cd android
 gradlew.bat assembleDebug
+gradlew.bat installDebug
+
+adb logcat -s OxyPulse #Для просмотра логов приложения
 ```
 
 APK: `app/build/outputs/apk/debug/app-debug.apk`  
-minSdk 28, BLE нужен для BLE-режима.
+minSdk 28, targetSdk 35.
+
+Нужны разрешения BLE (и уведомления для foreground service). На ЦУ общая WiFi-сеть с ESP не нужна.
 
 ## Экраны
 
 | Экран | Назначение |
 |---|---|
-| **ConnectScreen** | WiFi (IP) / BLE (скан `ESP32-Tester`) |
-| **TesterScreen** | Uptime, GPIO/Servo, Wellue/COOSPO, отключение |
+| **ConnectScreen** | Вкладка «ЦУ» (`OxyPulse-CU`); «Стенд WiFi» — откат на main |
+| **Dashboard** | Статус, GPIO/Servo, датчики, действия, тренды |
+| **HRV / КП / практика / ИГТ** | Как в веб-UI; WiFi STA — только на HTTP |
 
 ## Архитектура
 
 ```
 TesterViewModel
-    ├── Esp32Repository (HTTP)
-    └── BleEsp32Repository (GATT)
-            └── StatusParser → DeviceStatus
+    └── Esp32Repository
+            ├── HttpEsp32Api          (стенд main)
+            ├── CuBleClient           (OxyPulse-CU)
+            └── WearableBleManager    (Wellue OxyII + COOSPO 0x180D)
+                    └── WearableBleService (foreground)
 ```
 
-| Компонент | Роль |
-|---|---|
-| `api/HttpEsp32Api.kt` | GET `/api/status`, POST `/api/cmd` |
-| `ble/BleEsp32Repository.kt` | scan, connect, notify |
-| `api/Protocol.kt` | UUID, `CommandBuilder`, whitelist GPIO |
-| `ui/Screens.kt`, `ui/Dialogs.kt` | Compose UI |
-
-Пакет Kotlin: `com.oxypulse.esp32tester` (историческое имя, переименование — позже).
-
-## BLE UUID
-
-| Роль | UUID |
-|---|---|
-| Service | `a1b2c3d4-e5f6-7890-abcd-ef1234567890` |
-| STATUS | `a1b2c3d4-e5f6-7890-abcd-ef1234567891` |
-| CMD | `a1b2c3d4-e5f6-7890-abcd-ef1234567892` |
-
-Клапаны V1–V6: GPIO **25, 26, 27, 13, 14, 21**; мотор O₂ **33**; Servo1 **D4/GPIO 4**. Не 22/23/18/19 — I²C.
+Пакет Kotlin: `com.oxypulse.esp32tester` (историческое имя).
 
 ## Стек
 
@@ -76,7 +67,8 @@ Kotlin, Jetpack Compose, Hilt, blessed-kotlin, OkHttp.
 
 | Документ | Содержание |
 |---|---|
-| [`docs/API.md`](../docs/API.md) | JSON, endpoints |
-| [`firmware_main_devkit/README.md`](../firmwares/firmware_main_devkit/README.md) | Главный узел, калибровки |
-| [`docs/HARDWARE.md`](../docs/HARDWARE.md) | Распиновка, датчики, питание |
-| [`web/README.md`](../web/README.md) | Веб-UI, тренды |
+| [`docs/API.md`](../docs/API.md) | HTTP и GATT ЦУ |
+| [`firmware_valve_devkit/README.md`](../firmwares/firmware_valve_devkit/README.md) | ЦУ |
+| [`firmware_main_devkit/README.md`](../firmwares/firmware_main_devkit/README.md) | Стенд |
+| [`docs/HARDWARE.md`](../docs/HARDWARE.md) | Распиновка |
+| [`TESTING.md`](../TESTING.md) | Чеклист мэтча ролей |

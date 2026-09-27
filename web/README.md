@@ -1,6 +1,6 @@
 # OxyPulse — Web UI
 
-Vanilla HTML/JS — **основной клиент** прошивки [`firmware_main_devkit/`](../firmwares/firmware_main_devkit/).
+Vanilla HTML/JS — клиент стендового сплита [`firmware_main_devkit/`](../firmwares/firmware_main_devkit/). Это **не** полевой UI схемы ЦУ+Android (`firmware_valve_devkit` веба не отдаёт).
 
 LittleFS: `pio run -t uploadfs` из `firmwares/firmware_main_devkit/` (`data_dir = ../../web`).
 

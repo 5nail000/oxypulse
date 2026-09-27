@@ -24,15 +24,15 @@
 
 ### Приоритеты на текущем этапе
 
-- **Прошивка ESP32** — [`firmwares/firmware_main_devkit/`](firmwares/firmware_main_devkit/) + [`firmwares/firmware_ble_s3/`](firmwares/firmware_ble_s3/) — основная работа
-- **Веб-интерфейс** — [`web/`](web/) — основная работа
-- **Android** — [`android/`](android/) — последний приоритет, WiFi HTTP (GATT только на монолите)
+- **Полевая схема** — [`firmwares/firmware_valve_devkit/`](firmwares/firmware_valve_devkit/) (ЦУ клапанов на CH340) + [`android/`](android/) (UI, BLE к ЦУ, Wellue, COOSPO)
+- **Web UI** ([`web/`](web/)) — **заморожен** на текущем этапе; новые фичи ИГТ (скrolling-графики, отчёт мониторинга) — только Android
+- **Стендовый откат** — [`firmwares/firmware_main_devkit/`](firmwares/firmware_main_devkit/) + [`web/`](web/) + BLE-узел S3; не ломаем
+- **S3** — запасной модем на потом; в этом срезе не развиваем UART-мост и не держим два central на одни wearables
 
+### Инварианты полевой схемы (не переспрашивать)
 
-
-Связь с устройством: **HTTP JSON** (WiFi AP или STA главного узла). Внешние пульсоксиметры
-
-(Wellue, COOSPO) подключает **ESP32-S3** как BLE-central — браузер их не видит напрямую.
+- **Кольцо Wellue и ремень COOSPO** подключает **только Android**. ЦУ — BLE peripheral к телефону, **не** BLE central к wearables. Сканы/GATT кольца и пояса на ESP не возвращать.
+- **Обрыв BLE-GATT телефона ↔ ЦУ не прерывает ИГТ.** На ЦУ нет keep-alive abort. Телефон сам восстанавливает GATT. Обрывы пишутся в отчёт мониторинга; протокол на ESP идёт дальше. Abort — только явная команда (`igt_abort`) или ошибка железа/датчиков. За час практики обрывы ожидаемы и для здоровья безопасны.
 
 
 
@@ -54,7 +54,7 @@
 
 **2. Интервальная Гипоксическая Тренировка (ИГТ)**
 
-- Подготовка буфера гипоксии (V1, V4, O2_MOTOR) и интервалы гипоксия/нормоксия (Servo1) — FSM в [`firmware_main_devkit`](firmwares/firmware_main_devkit/), не зависит от веба. В каждой нормоксии (кроме последней) буфер готовится параллельно отсчёту фазы; при опоздании буфера практика ждёт (`waiting_buffer`).
+- Подготовка буфера гипоксии (V1, V4, O2_MOTOR) и интервалы гипоксия/нормоксия (Servo1) — FSM в [`firmware_main_devkit`](firmwares/firmware_main_devkit/), не зависит от веба. Servo1 на гипоксию — в момент старта практики / следующей гипоксии, не в `ready`. В каждой нормоксии (кроме последней) буфер готовится параллельно отсчёту фазы **без выкачки** (сразу наполнение → рециркуляция); при опоздании буфера практика ждёт (`waiting_buffer`).
 - Встроенный протокол «Гипоксия/Нормоксия на каждый день» (15% O₂, 6+5 мин × 6) и кастомные в браузере.
 - **Справочник по протоколам ИГТ** — внешний проект
 
@@ -72,9 +72,13 @@
 
 
 
-**Главный узел:** ESP32-DEVKIT CH340 ([`firmwares/firmware_main_devkit/`](firmwares/firmware_main_devkit/))
+**Главный узел (стенд):** ESP32-DEVKIT CH340 ([`firmwares/firmware_main_devkit/`](firmwares/firmware_main_devkit/)) — WiFi/HTTP/I2C/клапаны/ИГТ
 
-**BLE-узел:** ESP32-S3-N16R8 ([`firmwares/firmware_ble_s3/`](firmwares/firmware_ble_s3/)) — Wellue, COOSPO; UART на главный узел
+**ЦУ клапанов (поле):** та же CH340, прошивка [`firmwares/firmware_valve_devkit/`](firmwares/firmware_valve_devkit/) — I²C + GPIO + ИГТ + BLE peripheral `OxyPulse-CU`, без WiFi/веба
+
+**Android:** UI, BLE central к ЦУ и к Wellue/COOSPO; тренды и HRV локально. WiFi HTTP к main — откат
+
+**BLE-узел (стенд / запас):** ESP32-S3-N16R8 ([`firmwares/firmware_ble_s3/`](firmwares/firmware_ble_s3/)) — Wellue, COOSPO; UART на главный узел. В полевом срезе не обязателен.
 
 **Датчики I2C** — две шины на DevKit: буферы гипоксии/гипероксии SDA=22/SCL=23; рабочий SDA=18/SCL=19.
 
@@ -83,9 +87,12 @@
 - **SFM3300-250-D** — рабочий 18/19, `0x40` — поток, объёмы фаз, VE
 - **SCD41** — рабочий 18/19, `0x62` — CO₂ ppm, T, RH
 
-**Внешние BLE** (S3 central, данные на DevKit по UART):
+**Внешние BLE**
 
-- **Wellue Ring O2 S** — OxyII GATT — SpO₂, HR, батарея, контакт
+- **Поле:** телефон — central Wellue OxyII (`e8fb0001-…`) и COOSPO HR `0x180D` / `0x2A37`; на ЦУ их нет
+- **Стенд:** S3 central, данные на DevKit по UART
+
+- **Wellue Ring O2 S** — SpO₂, HR, батарея, контакт (скан: имя `S8-AW` / mfg `0xF34E` / `0x036F`)
 - **COOSPO H6M** — Heart Rate 0x180D — ЧСС, R-R (если есть)
 
 
@@ -106,11 +113,26 @@ GPIO34/GPIO35 **не использовать** под I2C (input-only на `esp
 
 
 
-**Главный узел (`firmwares/firmware_main_devkit/`):** WiFi AP+STA, HTTP, LittleFS, I2C, GPIO/Servo, тренды, HRV; UART RX.
+**Полевая схема (этот срез):** телефон — UI + BLE; CH340 — чистый мозг клапанов.
 
-**BLE-узел (`firmwares/firmware_ble_s3/`):** NimBLE central (Wellue, COOSPO), WiFi выключен, UART TX. GATT нет.
+```
+Wellue / COOSPO  --BLE-->  [Android UI, HRV, тренды]  --compact GATT-->  [ЦУ firmware_valve_devkit]
+                                                                      I²C, V1–V6, Servo1, ИГТ
+```
 
-**Монолит (`firmwares/firmware_alone_devkit/`):** одна плата WiFi+BLE — архив для отката.
+**Стендовый откат (не ломаем):**
+
+```
+Wellue / COOSPO  --BLE-->  [BLE-узел S3]  --UART-->  [firmware_main_devkit]  --WiFi HTTP-->  браузер / Android WiFi
+```
+
+**Главный узел (`firmware_main_devkit/`):** WiFi AP+STA, HTTP, LittleFS, I2C, GPIO/Servo, тренды, HRV; UART RX.
+
+**ЦУ (`firmware_valve_devkit/`):** те же I2C/GPIO/ИГТ, NimBLE peripheral `OxyPulse-CU`, cmd `phys`. Обрыв GATT **не** abort ИГТ. Нет WiFi/веба/трендов/HRV/UART. Кольцо/ремень на ЦУ нет.
+
+**BLE-узел (`firmware_ble_s3/`):** NimBLE central (Wellue, COOSPO), WiFi выключен, UART TX. GATT нет. В полевом срезе — запас.
+
+**Монолит (`firmware_alone_devkit/`):** одна плата WiFi+BLE — архив для отката. UUID `ESP32-Tester`, не ЦУ.
 
 
 
@@ -256,9 +278,7 @@ BLE-узел не поднимает WiFi. Главный узел не дела
 
 - Compose, WiFi HTTP (GATT — только `firmware_alone_devkit`)
 
-- GPIO/Servo диалоги, Wellue/COOSPO из JSON
-
-- I2C-метрики в UI пока не вынесены — см. веб
+- Датчики I2C + BLE, GPIO/Servo, тренды, HRV, КП, практика Бутейко, ИГТ — как веб-UI
 
 
 
@@ -276,7 +296,7 @@ BLE-узел не поднимает WiFi. Главный узел не дела
 
 - Веб-UI: датчики, действия (HRV, КП Бутейко, практика Бутейко на тренажёре), тренды (~75 мин RAM, PNG окна), WiFi, GPIO/Servo
 
-- Android: базовое подключение WiFi/BLE, GPIO/Servo, Wellue/COOSPO
+- **Android** — [`android/`](android/): Compose, WiFi HTTP (датчики, тренды, HRV, КП, практика, ИГТ; GATT — только `firmware_alone_devkit`)
 
 - Документация: `docs/API.md`, README прошивки/веба
 

@@ -35,6 +35,7 @@ constexpr size_t MAX_GPIO_TRACKED = 16;
 
 constexpr uint32_t GPIO_TAP_MS = 3000;
 constexpr uint32_t GPIO_TAP_MAX_MS = 10000;
+constexpr uint32_t O2_MOTOR_TAP_MS = 250;
 
 // Исполнители — docs/HARDWARE.md. GPIO 4 только PWM (Servo1), не gpio_set.
 constexpr uint8_t SERVO1_PIN = 4;
@@ -45,6 +46,12 @@ constexpr uint8_t VALVE_OUT_DEP_HYPO_PIN = 13;
 constexpr uint8_t VALVE_OUT_DEP_HYPER_PIN = 14;
 constexpr uint8_t VALVE_OUT_RICH_HYPER_PIN = 21;
 constexpr uint8_t O2_MOTOR_PIN = 33;
+
+// Реле клапанов V1–V6: platformio.ini → GPIO_VALVE_ACTIVE_LOW (1 = LOW→ON).
+#ifndef GPIO_VALVE_ACTIVE_LOW
+#define GPIO_VALVE_ACTIVE_LOW 0
+#endif
+constexpr bool GPIO_VALVE_ACTIVE_LOW_B = GPIO_VALVE_ACTIVE_LOW != 0;
 
 // Разрешённые выходные GPIO (ESP32 DevKit). 16/17 заняты UART-мостом к BLE-узлу.
 static constexpr uint8_t GPIO_WHITELIST[] = {
@@ -170,8 +177,21 @@ constexpr size_t HRV_RR_PER_NOTIFY_MAX = 16;
 constexpr size_t HRV_JSON_CHUNK = 512;
 constexpr size_t STATIC_FILE_CHUNK = 1024;
 
+#ifndef IGT_PRESSURE_DELTA_HPA
+#ifdef IGT_PRESSURE_DROP_HPA
+#define IGT_PRESSURE_DELTA_HPA IGT_PRESSURE_DROP_HPA
+#else
+#define IGT_PRESSURE_DELTA_HPA 10
+#endif
+#endif
 #ifndef IGT_PRESSURE_DROP_HPA
-#define IGT_PRESSURE_DROP_HPA 10
+#define IGT_PRESSURE_DROP_HPA IGT_PRESSURE_DELTA_HPA
+#endif
+#ifndef IGT_WORK_PRESSURE_DELTA_HPA
+#define IGT_WORK_PRESSURE_DELTA_HPA 3
+#endif
+#ifndef IGT_PRESSURE_BASELINE_LIMIT_HPA
+#define IGT_PRESSURE_BASELINE_LIMIT_HPA 25
 #endif
 #ifndef IGT_PRIMARY_FILL_SEC
 #define IGT_PRIMARY_FILL_SEC 120
@@ -189,7 +209,11 @@ constexpr size_t STATIC_FILE_CHUNK = 1024;
 #define IGT_SERVO_NORMOXIA_DEG 0
 #endif
 
-constexpr float IGT_PRESSURE_DROP_HPA_F = static_cast<float>(IGT_PRESSURE_DROP_HPA);
+constexpr float IGT_PRESSURE_DELTA_HPA_F = static_cast<float>(IGT_PRESSURE_DELTA_HPA);
+constexpr float IGT_PRESSURE_DROP_HPA_F = IGT_PRESSURE_DELTA_HPA_F;
+constexpr float IGT_WORK_PRESSURE_DELTA_HPA_F = static_cast<float>(IGT_WORK_PRESSURE_DELTA_HPA);
+constexpr float IGT_PRESSURE_BASELINE_LIMIT_HPA_F =
+    static_cast<float>(IGT_PRESSURE_BASELINE_LIMIT_HPA);
 constexpr uint32_t IGT_PRIMARY_FILL_MS = static_cast<uint32_t>(IGT_PRIMARY_FILL_SEC) * 1000U;
 constexpr uint32_t IGT_PRESSURE_WAIT_MS = static_cast<uint32_t>(IGT_PRESSURE_WAIT_SEC) * 1000U;
 constexpr uint32_t IGT_RECIRC_TIMEOUT_MS = static_cast<uint32_t>(IGT_RECIRC_TIMEOUT_SEC) * 1000U;
