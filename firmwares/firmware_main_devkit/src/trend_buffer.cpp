@@ -14,8 +14,9 @@
 #include "config.h"
 #include "dps310.h"
 #include "logger.h"
-#include "scd41.h"
+#include "ocs3rl.h"
 #include "sfm3300.h"
+#include "stc31.h"
 
 namespace {
 
@@ -296,7 +297,7 @@ void trendBufferPoll() {
 
     const WellueSnapshot wellue = bleSensorsGetWellue();
     const CoospoSnapshot coospo = bleSensorsGetCoospo();
-    const Scd41Snapshot co2 = scd41GetSnapshot();
+    const Stc31Snapshot co2 = stc31GetSnapshot();
     const Ao02Snapshot o2 = ao02GetSnapshot();
     const Ao02Snapshot work_o2 = workingO2GetSnapshot();
     const FlowSnapshot flow = sfm3300GetSnapshot();
@@ -352,8 +353,17 @@ void trendBufferPoll() {
     if (bitOn(TREND_SRC_WORK_O2) && work_o2.ok) {
         s.work_o2 = scale10(work_o2.o2_percent);
     }
-    if (bitOn(TREND_SRC_WORK_PRESSURE) && work_pressure.ok) {
-        s.work_pressure = scale10(work_pressure.pressure_hpa);
+    if (bitOn(TREND_SRC_WORK_PRESSURE)) {
+#if WORKING_PRESSURE_ENABLED
+        if (work_pressure.ok) {
+            s.work_pressure = scale10(work_pressure.pressure_hpa);
+        }
+#else
+        const Ocs3rlSnapshot ocs_p = ocs3rlGetSnapshot();
+        if (ocs_p.pressure_hpa >= 800.0f && ocs_p.pressure_hpa <= 1200.0f) {
+            s.work_pressure = scale10(ocs_p.pressure_hpa);
+        }
+#endif
     }
 
     if (g_count == 0) {

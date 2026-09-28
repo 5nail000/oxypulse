@@ -153,7 +153,7 @@ STATUS — полный JSON как `GET /api/status`. CMD — как `POST /api
 | `o2` | O₂ рабочего контура (`ok`, `percent`, `mv`) |
 | `pressure` | DPS310 рабочего контура |
 | `flow` | SFM3300 |
-| `co2` | SCD41 |
+| `co2` | STC31-C |
 
 ### `sensors.o2` (алиас гипоксии)
 
@@ -186,15 +186,17 @@ STATUS — полный JSON как `GET /api/status`. CMD — как `POST /api
 | Поле | Тип |
 |---|---|
 | `ok` | bool |
-| `ppm` | int — отображаемое (`ppm_est` при `dynamic_comp`, иначе `ppm_raw`) |
-| `ppm_raw` | int — сырое с чипа |
-| `ppm_est` | int — оценка с компенсацией инерции |
-| `dynamic_comp` | bool — сборка с `SCD41_CO2_DYNAMIC_COMP=1` |
-| `percent` | float — `ppm / 10000` |
-| `temp_c`, `rh` | float — сырые T/RH с чипа |
-| `temp_c_est`, `rh_est` | float — оценка T/RH (при `dynamic_comp`) |
+| `ppm` | int — `percent × 10000` (совместимость с UI) |
+| `ppm_raw` / `ppm_est` | int — то же (динамической компенсации нет) |
+| `dynamic_comp` | bool — всегда `false` для STC31-C |
+| `percent` | float — vol% с чипа |
+| `temp_c`, `rh` | float — T с STC31; RH компенсации (пока 0 без SHT) |
+| `temp_c_est`, `rh_est` | float — = сырым |
 | `warming_up` | bool |
-| `asc_enabled` | bool — ASC чипа (задаётся `SCD41_ASC_ENABLED` в `platformio.ini` при старте) |
+| `asc_enabled` | bool — `STC31_ASC_ENABLED` в `platformio.ini` |
+| `sensor` | string — `"STC31-C"` |
+
+`sensors.working.o2.sensor` = `"OCS-3RL2.0"`; `mv` всегда 0 (цифровой UART).
 
 ### `sensors.wellue`
 
@@ -268,11 +270,11 @@ UART к BLE-узлу (только сплит `firmware_main_devkit`). Веб м
 
 Клапаны (NC, логический ON/OFF в API): **V1=25**, **V2=26**, **V3=27**, **V4=13**, **V5=14**, **V6=21**. Полярность линии — `GPIO_VALVE_ACTIVE_LOW` в `platformio.ini`. **O2_MOTOR=33** — только `gpio_tap` (toggle ON/OFF импульсом ~250 ms); `gpio_set` на 33 отклоняется. **Servo1=4** (D4) — только `servo_*`, не `gpio_set`. Логика — [`HARDWARE.md`](HARDWARE.md).
 
-`co2_frc` — Forced Recalibration: датчик должен 3+ минуты работать в известной среде (обычно 400 ppm, свежий воздух). Команда останавливает periodic mode, пишет в EEPROM датчика и запускает измерения снова.
+`co2_frc` — Forced Recalibration STC31-C: датчик в известной среде (обычно ~400 ppm свежего воздуха). `target_ppm` 400…2000 переводится во vol% внутри прошивки.
 
-ASC (Automatic Self-Calibration) — только через флаг сборки `SCD41_ASC_ENABLED` в `platformio.ini` (по умолчанию `0` для маски/контура). При старте прошивка задаёт ASC и сохраняет в EEPROM датчика. В UI и HTTP-команд нет.
+ASC — флаг сборки `STC31_ASC_ENABLED` в `platformio.ini` (по умолчанию `0` для маски/контура). В UI и HTTP-команд нет.
 
-`pin` ∈ `whitelist`. Не использовать как GPIO: **22/23** (гипоксия), **18/19** (рабочий), **16/17** (UART-мост).
+`pin` ∈ `whitelist`. Не использовать как GPIO: **22/23** (гипоксия), **18/19** (рабочий), **16/17** (UART BLE), **32/34** (UART OCS).
 
 Включение трендов — **`POST /api/trends/sources`**:
 
@@ -287,7 +289,7 @@ ASC (Automatic Self-Calibration) — только через флаг сборк
 - 1 Гц, ~75 мин RAM (кольцо 4500 точек в heap на DevKit); reboot обнуляет точки
 - `GET /api/trends?offset=&limit=` — постранично (max 300)
 - Массив `flow` в JSON трендов — **среднее VE за 30 с** (`ve_lpm`, л/мин), не мгновенный поток
-- При `SCD41_CO2_DYNAMIC_COMP=1`: `co2` — ppm оценки (est), `co2_raw` — ppm с чипа (hold между sample 5 с)
+- `co2` в трендах — ppm (`percent × 10000`) с STC31-C
 
 ---
 

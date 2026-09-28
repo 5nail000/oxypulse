@@ -6,7 +6,6 @@ struct Ao02Snapshot {
     bool ok = false;
 };
 
+// Буфер гипоксии: ADS1115 + AO-02. Рабочий O₂ — ocs3rl (UART).
 void ao02Init();
-void workingO2Init();
 Ao02Snapshot ao02GetSnapshot();
-Ao02Snapshot workingO2GetSnapshot();

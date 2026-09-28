@@ -32,9 +32,10 @@ pio device monitor
 Как у main, без UART 16/17:
 
 - I2C гипоксия: SDA=22, SCL=23
-- I2C рабочий: SDA=18, SCL=19
+- I2C рабочий: SDA=18, SCL=19 (STC31-C `0x29`, поток, давление)
+- OCS-3RL2.0 (рабочий O₂): UART RX=34 / TX=32, питание 5–12 V
 - V1–V6: 25, 26, 27, 13, 14, 21 (`GPIO_VALVE_ACTIVE_LOW=1`)
 - O2_MOTOR: 33
 - Servo1: GPIO 4
 
-Флаги IGT/SCD41 в `platformio.ini` совпадают со стендовым main.
+Флаги IGT/STC31 в `platformio.ini` совпадают со стендовым main.

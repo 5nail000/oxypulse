@@ -233,8 +233,21 @@ void pressureTask(void *param) {
                 setSnapshot(*ch, 0.0f, 0.0f, false);
             }
         } else {
-            fail_streak = 0;
-            setSnapshot(*ch, pressure_hpa, temp_c, true);
+            // Без датчика begin иногда «успешен» на мусоре — требуем правдоподобное P.
+            const bool plausible =
+                pressure_hpa >= 300.0f && pressure_hpa <= 1100.0f &&
+                temp_c >= -40.0f && temp_c <= 85.0f;
+            if (!plausible) {
+                setSnapshot(*ch, pressure_hpa, temp_c, false);
+                if (++fail_streak >= 10) {
+                    fail_streak = 0;
+                    ch->ready = false;
+                    ch->baseline_ok = false;
+                }
+            } else {
+                fail_streak = 0;
+                setSnapshot(*ch, pressure_hpa, temp_c, true);
+            }
         }
 
         const uint32_t now = millis();
@@ -303,7 +316,10 @@ void dps310Init() {
 }
 
 void workingPressureInit() {
-#if WORKING_PRESSURE_BMP390
+#if !WORKING_PRESSURE_ENABLED
+    logPrintf("BMP390/DPS working: отключён (WORKING_PRESSURE_ENABLED=0)");
+    return;
+#elif WORKING_PRESSURE_BMP390
     startChannel(g_working, "BMP390 working", I2cBusId::Working, "bmpWork", workingTask);
 #else
     startChannel(g_working, "DPS310 working", I2cBusId::Working, "dpsWork", workingTask);

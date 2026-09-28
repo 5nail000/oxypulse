@@ -6,9 +6,10 @@
 #include "gpio_controller.h"
 #include "i2c_bus.h"
 #include "logger.h"
+#include "ocs3rl.h"
 #include "servo_controller.h"
-#include "scd41.h"
 #include "sfm3300.h"
+#include "stc31.h"
 #include "trend_buffer.h"
 #include "wifi_server.h"
 
@@ -28,7 +29,7 @@ void setup() {
     dps310Init();
     workingPressureInit();
     sfm3300Init();
-    scd41Init();
+    stc31Init();
 
     servoControllerInit();
     bleSensorsInit();

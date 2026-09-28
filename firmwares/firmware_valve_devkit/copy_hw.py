@@ -6,12 +6,16 @@ import shutil
 MAIN_FILES = [
     "ao02.cpp",
     "ao02.h",
+    "ocs3rl.cpp",
+    "ocs3rl.h",
     "dps310.cpp",
     "dps310.h",
     "sfm3300.cpp",
     "sfm3300.h",
-    "scd41.cpp",
-    "scd41.h",
+    "stc31.cpp",
+    "stc31.h",
+    "sht4x.cpp",
+    "sht4x.h",
     "i2c_bus.cpp",
     "i2c_bus.h",
     "gpio_controller.cpp",
@@ -34,5 +38,11 @@ for name in MAIN_FILES:
     if not src.is_file():
         raise FileNotFoundError("valve CU: missing %s" % src)
     shutil.copy2(src, hw / name)
+
+# Старые копии SCD41 после смены датчиков не оставлять.
+for stale in ("scd41.cpp", "scd41.h"):
+    path = hw / stale
+    if path.is_file():
+        path.unlink()
 
 env.Append(CPPPATH=[str(hw)])

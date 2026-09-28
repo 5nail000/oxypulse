@@ -29,6 +29,19 @@ data class O2Status(
     val ok: Boolean = false,
     val percent: Float = 0f,
     val mv: Float = 0f,
+    val sensor: String = "",
+    val tempC: Float = 0f,
+    val rh: Float = 0f,
+    val pressureHpa: Float = 0f,
+    val aux: Float = 0f,
+    val fieldA: Float = 0f,
+    val fieldB: Float = 0f,
+    val fieldC: Float = 0f,
+    val statusRaw: Int = 0,
+    val o2Field: Int = -1,
+    val frame: String = "",
+    /** O₂ с поправкой на CO₂ STC31; NaN если нет в пакете */
+    val percentCo2Comp: Float = Float.NaN,
 )
 
 data class PressureStatus(
@@ -37,6 +50,9 @@ data class PressureStatus(
     val tempC: Float = 0f,
     val baselineOk: Boolean = false,
     val baselineHpa: Float = 0f,
+    val sensor: String = "",
+    val pInKpa: Int = 0,
+    val pOutKpa: Int = 0,
 )
 
 data class FlowStatus(
@@ -55,8 +71,10 @@ data class Co2Status(
     val ppmEst: Int = 0,
     val dynamicComp: Boolean = false,
     val percent: Float = 0f,
-    val tempC: Float = 0f,
-    val rh: Float = 0f,
+    val ticks: Int = -1,
+    val tempC: Float = Float.NaN,
+    val rh: Float = Float.NaN,
+    val shtTempC: Float = Float.NaN,
     val tempCEst: Float? = null,
     val rhEst: Float? = null,
     val warmingUp: Boolean = false,

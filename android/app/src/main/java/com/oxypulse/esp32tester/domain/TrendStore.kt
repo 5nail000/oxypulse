@@ -85,7 +85,12 @@ class TrendStore {
         o2 += if (sources.o2) finiteOrNull(s.hypoxiaO2.ok, s.hypoxiaO2.percent) else null
         flow += if (sources.flow) finiteOrNull(s.flow.ok, s.flow.veLpm) else null
         pressure += if (sources.pressure) finiteOrNull(s.hypoxiaPressure.ok, s.hypoxiaPressure.hpa) else null
-        workO2 += if (sources.workO2) finiteOrNull(s.workO2.ok, s.workO2.percent) else null
+        workO2 += when {
+            !sources.workO2 -> null
+            // не рисуем TEMP(~25) пока O₂ не привязан к полю
+            s.workO2.o2Field < 0 -> null
+            else -> finiteOrNull(s.workO2.ok, s.workO2.percent)
+        }
         workPressure += if (sources.workPressure) finiteOrNull(s.workPressure.ok, s.workPressure.hpa) else null
         rr += if (rrLive) saneRr(s.coospo.rrMs) else null
         slm += finiteOrNull(s.flow.ok, s.flow.slm)

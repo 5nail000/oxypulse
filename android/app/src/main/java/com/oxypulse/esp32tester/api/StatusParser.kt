@@ -173,6 +173,22 @@ object StatusParser {
             ok = obj.optBoolean("ok", false),
             percent = obj.optDouble("percent", 0.0).toFloat(),
             mv = obj.optDouble("mv", 0.0).toFloat(),
+            sensor = obj.optString("sensor", ""),
+            tempC = obj.optDouble("temp_c", 0.0).toFloat(),
+            rh = obj.optDouble("rh", 0.0).toFloat(),
+            pressureHpa = obj.optDouble("pressure_hpa", 0.0).toFloat(),
+            aux = obj.optDouble("aux", 0.0).toFloat(),
+            fieldA = obj.optDouble("field_a", 0.0).toFloat(),
+            fieldB = obj.optDouble("field_b", 0.0).toFloat(),
+            fieldC = obj.optDouble("field_c", 0.0).toFloat(),
+            statusRaw = obj.optInt("status_raw", 0),
+            o2Field = obj.optInt("o2_field", -1),
+            frame = obj.optString("frame", ""),
+            percentCo2Comp = if (obj.has("percent_co2_comp") && !obj.isNull("percent_co2_comp")) {
+                obj.optDouble("percent_co2_comp").toFloat()
+            } else {
+                Float.NaN
+            },
         )
     }
 
@@ -184,6 +200,9 @@ object StatusParser {
             tempC = obj.optDouble("temp_c", 0.0).toFloat(),
             baselineOk = obj.optBoolean("baseline_ok", false),
             baselineHpa = obj.optDouble("baseline_hpa", 0.0).toFloat(),
+            sensor = obj.optString("sensor", ""),
+            pInKpa = obj.optInt("p_in_kpa", 0),
+            pOutKpa = obj.optInt("p_out_kpa", 0),
         )
     }
 
@@ -218,8 +237,10 @@ object StatusParser {
             ppmEst = obj.optInt("ppm_est", 0),
             dynamicComp = obj.optBoolean("dynamic_comp", false),
             percent = obj.optDouble("percent", 0.0).toFloat(),
-            tempC = obj.optDouble("temp_c", 0.0).toFloat(),
-            rh = obj.optDouble("rh", 0.0).toFloat(),
+            ticks = obj.optInt("ticks", -1),
+            tempC = obj.optDouble("temp_c", Double.NaN).toFloat(),
+            rh = obj.optDouble("rh", Double.NaN).toFloat(),
+            shtTempC = obj.optDouble("sht_temp_c", Double.NaN).toFloat(),
             tempCEst = tempEst,
             rhEst = rhEst,
             warmingUp = obj.optBoolean("warming_up", false),
@@ -285,13 +306,35 @@ object StatusParser {
         val w = root.optJSONObject("w")
         val hypoO2 = optLiveFloat(h, "o2")
         val hypoP = optLiveFloat(h, "p")
-        val workO2 = optLiveFloat(w, "o2")
+        val workO2Live = optLiveFloat(w, "o2")
         val workP = optLiveFloat(w, "p")
         val ve = optLiveFloat(w, "ve")
         val slm = optLiveFloat(w, "slm")
         val inhaleL = optLiveFloat(w, "il")
         val exhaleL = optLiveFloat(w, "el")
         val co2pct = optLiveFloat(w, "co2")
+        val ocsA = w?.optDouble("oa", Double.NaN)?.toFloat() ?: Float.NaN
+        val ocsB = w?.optDouble("ob", Double.NaN)?.toFloat() ?: Float.NaN
+        val ocsC = w?.optDouble("oc", Double.NaN)?.toFloat() ?: Float.NaN
+        val hasOcs = !ocsA.isNaN() || !ocsB.isNaN() || !ocsC.isNaN()
+        val o2Field = w?.optInt("of", -1) ?: -1
+        val o2Comp = optLiveFloat(w, "o2c")
+        val workO2Status = O2Status(
+            ok = workO2Live.first || hasOcs,
+            percent = workO2Live.second,
+            sensor = "OCS-3RL2.0",
+            tempC = w?.optDouble("ot", 0.0)?.toFloat() ?: 0f,
+            rh = w?.optDouble("orh", 0.0)?.toFloat() ?: 0f,
+            pressureHpa = w?.optDouble("op", 0.0)?.toFloat()
+                ?: if (workP.first) workP.second else 0f,
+            fieldA = if (ocsA.isNaN()) 0f else ocsA,
+            fieldB = if (ocsB.isNaN()) 0f else ocsB,
+            fieldC = if (ocsC.isNaN()) 0f else ocsC,
+            statusRaw = w?.optInt("ost", 0) ?: 0,
+            o2Field = o2Field,
+            frame = "live",
+            percentCo2Comp = if (o2Comp.first) o2Comp.second else Float.NaN,
+        )
         val gpio = mutableListOf<GpioState>()
         val gp = root.optJSONArray("gp") ?: JSONArray()
         for (i in 0 until gp.length()) {
@@ -316,8 +359,15 @@ object StatusParser {
             sensors = Sensors(
                 hypoxiaO2 = O2Status(ok = hypoO2.first, percent = hypoO2.second),
                 hypoxiaPressure = PressureStatus(ok = hypoP.first, hpa = hypoP.second),
-                workO2 = O2Status(ok = workO2.first, percent = workO2.second),
-                workPressure = PressureStatus(ok = workP.first, hpa = workP.second),
+                workO2 = workO2Status,
+                workPressure = PressureStatus(
+                    ok = workP.first || w?.has("pi") == true || w?.has("po") == true,
+                    hpa = workP.second,
+                    tempC = w?.optDouble("ot", 0.0)?.toFloat() ?: 0f,
+                    sensor = if (w?.has("pi") == true || w?.has("po") == true) "OCS-3RL" else "",
+                    pInKpa = w?.optInt("pi", 0) ?: 0,
+                    pOutKpa = w?.optInt("po", 0) ?: 0,
+                ),
                 flow = FlowStatus(
                     ok = ve.first || slm.first || inhaleL.first || exhaleL.first,
                     slm = slm.second,
@@ -331,6 +381,10 @@ object StatusParser {
                     ppm = (co2Percent * 10000f).toInt(),
                     ppmRaw = (co2Percent * 10000f).toInt(),
                     ppmEst = (co2Percent * 10000f).toInt(),
+                    ticks = w?.optInt("ck", -1) ?: -1,
+                    tempC = liveFloat(w, "ct"),
+                    rh = liveFloat(w, "cr"),
+                    shtTempC = liveFloat(w, "cs"),
                 ),
             ),
             igt = parseLiveIgt(igt),
@@ -379,6 +433,11 @@ object StatusParser {
             is Number -> v.toInt() != 0
             else -> obj.optInt(key, 0) != 0
         }
+    }
+
+    private fun liveFloat(obj: JSONObject?, key: String): Float {
+        if (obj == null || !obj.has(key) || obj.isNull(key)) return Float.NaN
+        return obj.optDouble(key, Double.NaN).toFloat()
     }
 
     private fun optLiveFloat(obj: JSONObject?, key: String): Pair<Boolean, Float> {

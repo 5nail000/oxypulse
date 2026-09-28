@@ -8,10 +8,11 @@
 #include "i2c_bus.h"
 #include "igt_session.h"
 #include "logger.h"
+#include "ocs3rl.h"
 #include "phys_uplink.h"
-#include "scd41.h"
 #include "servo_controller.h"
 #include "sfm3300.h"
+#include "stc31.h"
 
 void setup() {
     Serial.begin(115200);
@@ -31,7 +32,7 @@ void setup() {
     dps310Init();
     workingPressureInit();
     sfm3300Init();
-    scd41Init();
+    stc31Init();
 
     servoControllerInit();
     igtSessionInit();

@@ -41,8 +41,6 @@ const char *knownDeviceName(I2cBusId bus, uint8_t address) {
     switch (address) {
         case ADDR_SFM3300:
             return "SFM3300 (поток, рабочий)";
-        case ADDR_ADS1115:
-            return "ADS1115 (O₂ рабочий)";
         case ADDR_DPS310:
         case ADDR_DPS310_ALT:
 #if WORKING_PRESSURE_BMP390
@@ -50,8 +48,10 @@ const char *knownDeviceName(I2cBusId bus, uint8_t address) {
 #else
             return "DPS310 (давление рабочий)";
 #endif
-        case ADDR_SCD41:
-            return "SCD41 (CO₂ рабочий)";
+        case ADDR_STC31:
+            return "STC31-C (CO₂ рабочий)";
+        case ADDR_SHT4X:
+            return "SHT4x (T/RH рабочий)";
         default:
             return "неизвестное устройство";
     }
@@ -178,7 +178,7 @@ void i2cBusScan() {
     logMissingDps(I2cBusId::Hypoxia);
 
     scanOne(I2cBusId::Working);
-    const uint8_t working_expected[] = {ADDR_ADS1115, ADDR_SFM3300, ADDR_SCD41};
+    const uint8_t working_expected[] = {ADDR_SFM3300, ADDR_STC31};
     logMissing(I2cBusId::Working, working_expected, sizeof(working_expected));
     logMissingDps(I2cBusId::Working);
 }

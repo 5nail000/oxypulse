@@ -10,10 +10,11 @@
 #include "gpio_controller.h"
 #include "igt_session.h"
 #include "logger.h"
+#include "ocs3rl.h"
 #include "phys_uplink.h"
-#include "scd41.h"
 #include "servo_controller.h"
 #include "sfm3300.h"
+#include "stc31.h"
 
 namespace {
 
@@ -167,7 +168,7 @@ bool parseCommandJson(const char *json, size_t len) {
             logPrintf("cmd: co2_frc target_ppm вне диапазона");
             return false;
         }
-        scd41RequestForcedRecalibration(target_ppm);
+        stc31RequestForcedRecalibration(target_ppm);
         return true;
     }
     if (strcmp(cmd, "igt_prep") == 0) {
@@ -256,10 +257,11 @@ size_t buildLiveJson(char *buffer, size_t capacity) {
 
     const Ao02Snapshot o2 = ao02GetSnapshot();
     const Ao02Snapshot work_o2 = workingO2GetSnapshot();
+    const Ocs3rlSnapshot ocs = ocs3rlGetSnapshot();
     const FlowSnapshot flow = sfm3300GetSnapshot();
     const Dps310Snapshot pressure = dps310GetSnapshot();
     const Dps310Snapshot work_pressure = workingPressureGetSnapshot();
-    const Scd41Snapshot co2 = scd41GetSnapshot();
+    const Stc31Snapshot co2 = stc31GetSnapshot();
 
     JsonObject h = doc["h"].to<JsonObject>();
     setOptFloat(h, "o2", o2.ok, o2.o2_percent);
@@ -267,12 +269,41 @@ size_t buildLiveJson(char *buffer, size_t capacity) {
 
     JsonObject w = doc["w"].to<JsonObject>();
     setOptFloat(w, "o2", work_o2.ok, work_o2.o2_percent);
+#if WORKING_PRESSURE_ENABLED
     setOptFloat(w, "p", work_pressure.ok, work_pressure.pressure_hpa);
+#else
+    setOptFloat(w, "p", ocs.pressure_hpa > 0.0f, ocs.pressure_hpa);
+    w["pi"] = ocs.p_in_kpa;
+    w["po"] = ocs.p_out_kpa;
+#endif
     setOptFloat(w, "ve", flow.ok, flow.ve_lpm);
     setOptFloat(w, "slm", flow.ok, flow.flow_slm);
     setOptFloat(w, "il", flow.ok, flow.inhale_l);
     setOptFloat(w, "el", flow.ok, flow.exhale_l);
-    setOptFloat(w, "co2", co2.ok, static_cast<float>(co2.co2_ppm) / 10000.0f);
+    setOptFloat(w, "co2", co2.ok, co2.co2_percent);
+    if (co2.ok) {
+        w["ct"] = co2.temp_c;
+        w["cr"] = co2.rh_percent;
+        w["cs"] = co2.sht_temp_c;
+        w["ck"] = co2.gas_ticks;
+    }
+    // Сырые поля OCS (ЦУ live) — иначе Android видит нули и «не определён».
+    const bool ocs_frame =
+        ocs.ok || ocs.field_a != 0.0f || ocs.field_b != 0.0f || ocs.field_c != 0.0f;
+    if (ocs_frame) {
+        w["oa"] = ocs.field_a;
+        w["ob"] = ocs.field_b;
+        w["oc"] = ocs.field_c;
+        w["ot"] = ocs.temp_c;
+        w["orh"] = ocs.rh_percent;
+        w["of"] = ocs.o2_field_index;
+        w["ost"] = ocs.status_raw;
+        if (ocs.pressure_hpa > 0.0f) {
+            w["op"] = ocs.pressure_hpa;
+        }
+        const float o2_raw = (work_o2.ok && work_o2.o2_percent > 0.0f) ? work_o2.o2_percent : ocs.o2_percent;
+        w["o2c"] = ocs3rlO2Co2Compensated(o2_raw, co2.co2_percent, co2.ok);
+    }
 
     JsonArray gp = doc["gp"].to<JsonArray>();
     uint8_t pins[MAX_GPIO_TRACKED];

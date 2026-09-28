@@ -43,7 +43,7 @@ constexpr uint8_t O2_MOTOR_PIN = 33;
 constexpr bool GPIO_VALVE_ACTIVE_LOW_B = GPIO_VALVE_ACTIVE_LOW != 0;
 
 static constexpr uint8_t GPIO_WHITELIST[] = {
-    4, 13, 14, 18, 19, 21, 22, 23, 25, 26, 27, 32, 33,
+    4, 13, 14, 18, 19, 21, 22, 23, 25, 26, 27, 33,
 };
 constexpr size_t GPIO_WHITELIST_SIZE = sizeof(GPIO_WHITELIST) / sizeof(GPIO_WHITELIST[0]);
 
@@ -64,13 +64,34 @@ constexpr uint8_t ADDR_DPS310_ALT = 0x77;
 #ifndef WORKING_PRESSURE_BMP390
 #define WORKING_PRESSURE_BMP390 0
 #endif
-constexpr uint8_t ADDR_SCD41 = 0x62;
+#ifndef WORKING_PRESSURE_ENABLED
+#define WORKING_PRESSURE_ENABLED 1
+#endif
+constexpr uint8_t ADDR_STC31 = 0x29;
+constexpr uint8_t ADDR_SHT4X = 0x44;
 
 constexpr float O2_HYPOXIA_OFFSET_MV = 0.19f;
 constexpr float O2_HYPOXIA_AIR_MV = 10.85f;
-constexpr float O2_WORKING_OFFSET_MV = 0.3f;
-constexpr float O2_WORKING_AIR_MV = 10.68f;
 constexpr float O2_AIR_PERCENT = 20.9f;
+
+constexpr int OCS_UART_RX_PIN = 34;
+constexpr int OCS_UART_TX_PIN = 32;
+constexpr uint32_t OCS_UART_BAUD = 9600;
+constexpr uint32_t OCS_POLL_INTERVAL_MS = 50;
+constexpr uint32_t OCS_QUERY_INTERVAL_MS = 1000;
+constexpr uint32_t OCS_STALE_MS = 3000;
+#ifndef OCS_O2_CO2_PER_VOL
+#define OCS_O2_CO2_PER_VOL 5.0f
+#endif
+#ifndef OCS_O2_CO2_AMBIENT_VOL
+#define OCS_O2_CO2_AMBIENT_VOL 0.04f
+#endif
+#ifndef OCS_FRAME_LAYOUT
+#define OCS_FRAME_LAYOUT 1
+#endif
+#ifndef OCS_O2_FIELD
+#define OCS_O2_FIELD -1
+#endif
 
 constexpr float SFM_FLOW_OFFSET = 32768.0f;
 constexpr float SFM_FLOW_SCALE = 120.0f;
@@ -84,44 +105,14 @@ constexpr size_t FLOW_VE_BUCKETS = FLOW_VE_WINDOW_MS / FLOW_VE_BUCKET_MS;
 constexpr uint32_t O2_POLL_INTERVAL_MS = 50;
 constexpr uint32_t DPS_POLL_INTERVAL_MS = 100;
 
-constexpr uint32_t SCD41_POLL_INTERVAL_MS = 1000;
-constexpr uint32_t SCD41_WARMUP_MS = 10000;
+constexpr uint32_t STC31_POLL_INTERVAL_MS = 1000;
+constexpr uint32_t STC31_WARMUP_MS = 2000;
+#ifndef STC31_ASC_ENABLED
+#define STC31_ASC_ENABLED 0
+#endif
 #ifndef SCD41_CO2_DYNAMIC_COMP
 #define SCD41_CO2_DYNAMIC_COMP 0
 #endif
-#ifndef SCD41_CO2_TAU_SEC
-#define SCD41_CO2_TAU_SEC 60
-#endif
-#ifndef SCD41_CO2_TRUST
-#define SCD41_CO2_TRUST 70
-#endif
-#ifndef SCD41_CO2_COMP_MAX_DELTA_PPM
-#define SCD41_CO2_COMP_MAX_DELTA_PPM 15000
-#endif
-#ifndef SCD41_ASC_ENABLED
-#define SCD41_ASC_ENABLED 0
-#endif
-constexpr float SCD41_TAU_CO2_S = static_cast<float>(SCD41_CO2_TAU_SEC > 0 ? SCD41_CO2_TAU_SEC : 60);
-constexpr float SCD41_TAU_TRUST_CO2 = static_cast<float>(SCD41_CO2_TRUST) / 100.0f;
-constexpr float SCD41_MAX_CORR_PPM = static_cast<float>(SCD41_CO2_COMP_MAX_DELTA_PPM);
-constexpr float SCD41_TAU_TEMP_S = 120.0f;
-constexpr float SCD41_TAU_RH_S = 90.0f;
-constexpr float SCD41_TAU_TRUST_TEMP = 0.35f;
-constexpr float SCD41_TAU_TRUST_RH = 0.35f;
-constexpr float SCD41_DECAY_DAMPING_TEMP = 0.25f;
-constexpr float SCD41_DECAY_DAMPING_RH = 0.25f;
-constexpr float SCD41_SAMPLE_INTERVAL_S = 5.0f;
-constexpr size_t SCD41_SLOPE_WINDOW = 5;
-constexpr float SCD41_MAX_CORR_TEMP_C = 2.0f;
-constexpr float SCD41_MAX_CORR_RH = 12.0f;
-constexpr float SCD41_BASELINE_ALPHA = 0.04f;
-constexpr uint16_t SCD41_EVENT_CO2_PPM = 150;
-constexpr float SCD41_EVENT_TEMP_C = 1.5f;
-constexpr float SCD41_EVENT_RH = 8.0f;
-constexpr float SCD41_CLAMP_TEMP_BELOW_C = 2.0f;
-constexpr float SCD41_CLAMP_TEMP_ABOVE_C = 8.0f;
-constexpr float SCD41_CLAMP_RH_BELOW = 10.0f;
-constexpr float SCD41_CLAMP_RH_ABOVE = 25.0f;
 
 #ifndef IGT_PRESSURE_DELTA_HPA
 #ifdef IGT_PRESSURE_DROP_HPA

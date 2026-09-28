@@ -330,11 +330,9 @@ function co2PercentFromPpm(ppm) {
 }
 
 function co2PercentFromObj(co2) {
-  const fromPpm = co2PercentFromPpm(co2?.ppm);
-  if (fromPpm != null) return fromPpm;
   const pct = Number(co2?.percent);
   if (Number.isFinite(pct)) return roundCo2Pct(pct);
-  return null;
+  return co2PercentFromPpm(co2?.ppm);
 }
 
 function co2RawPercentFromObj(co2) {

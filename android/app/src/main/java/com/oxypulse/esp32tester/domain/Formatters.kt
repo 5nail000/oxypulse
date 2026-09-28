@@ -22,9 +22,46 @@ object Formatters {
     fun o2Text(s: O2Status): String =
         if (s.ok) "O₂: ${"%.1f".format(s.percent)} % (${"%.2f".format(s.mv)} mV)" else "нет данных"
 
-    fun pressureText(s: PressureStatus): String =
-        if (s.ok) "${"%.1f".format(s.hpa)} hPa, ${"%.1f".format(s.tempC)} °C" else "нет данных"
+    fun ocsText(s: O2Status): String {
+        val hasFields = s.fieldA != 0f || s.fieldB != 0f || s.fieldC != 0f || s.percent != 0f
+        if (!s.ok && !hasFields) return "нет данных"
+        val o2Raw = if (s.o2Field == 7 || s.percent != 0f) s.percent else s.fieldA
+        val t = if (s.tempC != 0f) s.tempC else s.fieldC
+        val pKpa = when {
+            s.pressureHpa > 0f -> s.pressureHpa / 10f
+            s.statusRaw in 300..15000 -> s.statusRaw / 10f
+            else -> Float.NaN
+        }
+        return buildString {
+            append("O₂ (OCS): ${"%.1f".format(o2Raw)} %")
+            if (!s.percentCo2Comp.isNaN()) {
+                append("\nO₂ (CO₂): ${"%.1f".format(s.percentCo2Comp)} %")
+            }
+            append("\nRH (OCS): ${"%.1f".format(s.rh)} %")
+            append("\nT (OCS): ${"%.1f".format(t)} °C")
+            if (!pKpa.isNaN()) {
+                append("\nP: ${"%.1f".format(pKpa)} кПа")
+            }
+            if (s.frame.isNotBlank() && s.frame != "live") {
+                append("\nкадр: ${s.frame}")
+            }
+        }
+    }
 
+    fun isOcsWorkSensor(s: O2Status): Boolean =
+        s.sensor.contains("OCS", ignoreCase = true) ||
+            s.sensor.contains("3RL", ignoreCase = true)
+
+    fun pressureText(s: PressureStatus): String {
+        if (s.sensor == "OCS-3RL") {
+            val raw = if (s.hpa > 0f) s.hpa else (s.pInKpa * 256 + s.pOutKpa).toFloat()
+            if (raw <= 0f) return "нет данных"
+            return "${"%.1f".format(raw / 10f)} кПа"
+        }
+        if (!s.ok) return "нет данных"
+        val name = s.sensor.ifBlank { "P" }
+        return "$name: ${"%.1f".format(s.hpa)} hPa, ${"%.1f".format(s.tempC)} °C"
+    }
     fun flowText(s: FlowStatus): String =
         if (s.ok) {
             "Поток: ${"%.2f".format(s.slm)} л/мин\n" +
@@ -36,7 +73,8 @@ object Formatters {
         }
 
     fun co2Text(s: Co2Status): String {
-        if (!s.ok) return "нет данных"
+        val hasStream = s.ticks >= 0 || !s.tempC.isNaN() || !s.rh.isNaN() || !s.shtTempC.isNaN()
+        if (!s.ok && !hasStream) return "нет данных"
         val warmup = if (s.warmingUp) " (прогрев)" else ""
         val pct = co2Percent(s)
         val est = if (s.dynamicComp) ", оценка" else ""
@@ -48,14 +86,19 @@ object Formatters {
         }
         val temp = s.tempCEst ?: s.tempC
         val rh = s.rhEst ?: s.rh
-        val tempRaw = if (s.dynamicComp) " (датчик ${"%.1f".format(s.tempC)})" else ""
-        val rhRaw = if (s.dynamicComp) " (датчик ${"%.1f".format(s.rh)})" else ""
-        return "CO₂: ${"%.2f".format(pct)} % (${s.ppm} ppm$est)$warmup$rawLine\n" +
-            "T: ${"%.1f".format(temp)} °C$tempRaw\nRH: ${"%.1f".format(rh)} %$rhRaw"
+        val extra = buildString {
+            if (s.ticks >= 0) append("\nticks: ${s.ticks}")
+            if (!temp.isNaN()) append("\nT(STC31): ${"%.2f".format(temp)} °C")
+            if (!rh.isNaN()) append("\nRH(SHT): ${"%.1f".format(rh)} %")
+            if (!s.shtTempC.isNaN()) append("\nT(SHT): ${"%.1f".format(s.shtTempC)} °C")
+        }
+        return "CO₂: ${"%.3f".format(pct)} % (${s.ppm} ppm$est)$warmup$rawLine$extra"
     }
 
     fun co2Percent(s: Co2Status): Float {
-        if (s.ppm != 0) return (s.ppm / 10000f)
+        // percent — источник истины (STC31 vol%); ppm обрезается на uint16 при >6.55%.
+        if (s.percent != 0f) return s.percent
+        if (s.ppm != 0) return s.ppm / 10000f
         return s.percent
     }
 

@@ -11,9 +11,10 @@
 #include "gpio_controller.h"
 #include "igt_session.h"
 #include "logger.h"
+#include "ocs3rl.h"
 #include "servo_controller.h"
-#include "scd41.h"
 #include "sfm3300.h"
+#include "stc31.h"
 #include "trend_buffer.h"
 #include "wifi_sta.h"
 
@@ -176,7 +177,7 @@ bool parseCommandJson(const char *json, size_t len) {
             logPrintf("cmd: co2_frc target_ppm вне диапазона");
             return false;
         }
-        scd41RequestForcedRecalibration(target_ppm);
+        stc31RequestForcedRecalibration(target_ppm);
         return true;
     }
 
@@ -226,7 +227,7 @@ size_t buildStatusJson(char *buffer, size_t capacity) {
     const FlowSnapshot flow = sfm3300GetSnapshot();
     const Dps310Snapshot pressure = dps310GetSnapshot();
     const Dps310Snapshot work_pressure = workingPressureGetSnapshot();
-    const Scd41Snapshot co2 = scd41GetSnapshot();
+    const Stc31Snapshot co2 = stc31GetSnapshot();
 
     JsonObject sensors = doc["sensors"].to<JsonObject>();
 
@@ -252,19 +253,22 @@ size_t buildStatusJson(char *buffer, size_t capacity) {
             snap.phase == FlowPhase::Inhale ? "inhale" :
             snap.phase == FlowPhase::Exhale ? "exhale" : "idle";
     };
-    auto fillCo2 = [](JsonObject obj, const Scd41Snapshot &snap) {
+    auto fillCo2 = [](JsonObject obj, const Stc31Snapshot &snap) {
         obj["ok"] = snap.ok;
         obj["ppm"] = snap.co2_ppm;
         obj["ppm_raw"] = snap.co2_ppm_raw;
         obj["ppm_est"] = snap.co2_ppm_est;
         obj["dynamic_comp"] = snap.dynamic_comp;
-        obj["percent"] = static_cast<float>(snap.co2_ppm) / 10000.0f;
+        obj["percent"] = snap.co2_percent;
+        obj["ticks"] = snap.gas_ticks;
         obj["temp_c"] = snap.temp_c;
         obj["temp_c_est"] = snap.temp_c_est;
         obj["rh"] = snap.rh_percent;
         obj["rh_est"] = snap.rh_percent_est;
+        obj["sht_temp_c"] = snap.sht_temp_c;
         obj["warming_up"] = snap.warming_up;
         obj["asc_enabled"] = snap.asc_enabled;
+        obj["sensor"] = "STC31-C";
     };
 
     fillO2(sensors["o2"].to<JsonObject>(), o2);
@@ -278,7 +282,52 @@ size_t buildStatusJson(char *buffer, size_t capacity) {
 
     JsonObject working = sensors["working"].to<JsonObject>();
     fillO2(working["o2"].to<JsonObject>(), work_o2);
+    {
+        const Ocs3rlSnapshot ocs = ocs3rlGetSnapshot();
+        JsonObject wo2 = working["o2"].to<JsonObject>();
+        wo2["sensor"] = "OCS-3RL2.0";
+        wo2["temp_c"] = ocs.temp_c;
+        wo2["rh"] = ocs.rh_percent;
+        wo2["pressure_hpa"] = ocs.pressure_hpa;
+        wo2["aux"] = ocs.aux_raw;
+        wo2["field_a"] = ocs.field_a;
+        wo2["field_b"] = ocs.field_b;
+        wo2["field_c"] = ocs.field_c;
+        wo2["status_raw"] = ocs.status_raw;
+        wo2["o2_field"] = ocs.o2_field_index;
+        wo2["frame"] = ocs.full_range_frame ? "ext" : "short";
+        // ok если кадр свежий (есть поля), даже когда авто-O₂ не уверен
+        if (ocs.field_a != 0.0f || ocs.field_b != 0.0f || ocs.field_c != 0.0f || ocs.ok) {
+            wo2["ok"] = true;
+            if (!ocs.ok) {
+                wo2["percent"] = 0;
+            }
+            const float o2_raw = ocs.o2_percent;
+            wo2["percent_co2_comp"] =
+                ocs3rlO2Co2Compensated(o2_raw, co2.co2_percent, co2.ok);
+        }
+    }
     fillPressure(working["pressure"].to<JsonObject>(), work_pressure);
+#if !WORKING_PRESSURE_ENABLED
+    {
+        const Ocs3rlSnapshot ocs_p = ocs3rlGetSnapshot();
+        const bool ocs_frame =
+            ocs_p.ok || ocs_p.field_a != 0.0f || ocs_p.field_b != 0.0f || ocs_p.field_c != 0.0f;
+        JsonObject wp = working["pressure"].to<JsonObject>();
+        wp["ok"] = ocs_frame;
+        wp["sensor"] = "OCS-3RL";
+        wp["hpa"] = ocs_p.pressure_hpa;
+        wp["temp_c"] = ocs_p.temp_c;
+        wp["p_in_kpa"] = ocs_p.p_in_kpa;
+        wp["p_out_kpa"] = ocs_p.p_out_kpa;
+        wp["baseline_ok"] = false;
+        wp["baseline_hpa"] = 0;
+    }
+#elif WORKING_PRESSURE_BMP390
+    working["pressure"]["sensor"] = "BMP390";
+#else
+    working["pressure"]["sensor"] = "DPS310";
+#endif
     fillFlow(working["flow"].to<JsonObject>(), flow);
     fillCo2(working["co2"].to<JsonObject>(), co2);
 

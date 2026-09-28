@@ -381,8 +381,22 @@ private fun SensorsCard(
         SensorTile("O₂ (ADS1115)", Formatters.o2Text(s.hypoxiaO2), s.hypoxiaO2.ok, trendOn = sources.o2, onTrend = { onTrend("o2") }.takeIf { wifi })
         SensorTile("Давление DPS310", Formatters.pressureText(s.hypoxiaPressure), s.hypoxiaPressure.ok, trendOn = sources.pressure, onTrend = { onTrend("pressure") }.takeIf { wifi })
         Muted("Рабочий контур · I²C 18/19")
-        SensorTile("O₂ (ADS1115)", Formatters.o2Text(s.workO2), s.workO2.ok, trendOn = sources.workO2, onTrend = { onTrend("work_o2") }.takeIf { wifi })
-        SensorTile("Давление DPS310", Formatters.pressureText(s.workPressure), s.workPressure.ok, trendOn = sources.workPressure, onTrend = { onTrend("work_pressure") }.takeIf { wifi })
+        SensorTile(
+            "OCS-3RL2.0",
+            Formatters.ocsText(s.workO2),
+            s.workO2.ok,
+            trendOn = sources.workO2,
+            onTrend = { onTrend("work_o2") }.takeIf { wifi },
+        )
+        if (!Formatters.isOcsWorkSensor(s.workO2) && s.workPressure.sensor != "OCS-3RL") {
+            SensorTile(
+                if (s.workPressure.sensor.isNotBlank()) "Давление ${s.workPressure.sensor}" else "Давление (рабочий)",
+                Formatters.pressureText(s.workPressure),
+                s.workPressure.ok,
+                trendOn = sources.workPressure,
+                onTrend = { onTrend("work_pressure") }.takeIf { wifi },
+            )
+        }
         SensorTile(
             title = "Поток SFM3300",
             value = Formatters.flowText(s.flow),
@@ -402,7 +416,8 @@ private fun SensorsCard(
                 }
             }
         }
-        SensorTile("CO₂ SCD41", Formatters.co2Text(s.co2), s.co2.ok, trendOn = sources.co2, onTrend = { onTrend("co2") }.takeIf { wifi }) {
+        SensorTile("CO₂ STC31-C", Formatters.co2Text(s.co2), s.co2.ok, trendOn = sources.co2, onTrend = { onTrend("co2") }.takeIf { wifi }) {
+            Muted("FRC только на свежем воздухе (~400 ppm). ASC выкл.")
             SecondaryButton("Калибровка 400 ppm", onClick = onCo2Frc, enabled = !cmdsOff)
         }
         Muted(if (phoneBle) "BLE (телефон)" else "BLE (ESP32 central)")

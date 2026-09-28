@@ -18,7 +18,6 @@ constexpr float LSB_MV_GAIN_SIXTEEN = 0.0078125f;
 struct Channel {
     const char *tag;
     I2cBusId bus;
-    const char *task_name;
     Adafruit_ADS1115 ads;
     SemaphoreHandle_t mutex = nullptr;
     TaskHandle_t task = nullptr;
@@ -32,7 +31,6 @@ struct Channel {
 };
 
 Channel g_hypoxia;
-Channel g_working;
 
 void setSnapshot(Channel &ch, float o2_percent, float voltage_mv, bool ok) {
     if (ch.mutex == nullptr || xSemaphoreTake(ch.mutex, portMAX_DELAY) != pdTRUE) {
@@ -118,65 +116,34 @@ void ao02Task(void *param) {
     }
 }
 
-void startChannel(Channel &ch,
-                  const char *tag,
-                  I2cBusId bus,
-                  const char *task_name,
-                  float offset_mv,
-                  float air_mv) {
-    ch.tag = tag;
-    ch.bus = bus;
-    ch.task_name = task_name;
-    ch.offset_mv = offset_mv;
-    ch.air_mv = air_mv;
-    ch.air_percent = O2_AIR_PERCENT;
-    ch.mutex = xSemaphoreCreateMutex();
-    ch.ads_ready = beginAds(ch);
-    if (ch.ads_ready) {
-        ch.ads.setGain(GAIN_SIXTEEN);
-        logPrintf("%s: ADS1115 init OK (0x%02X)", tag, ADS_ADDR);
-    } else {
-        logPrintf("%s: ADS1115 init failed", tag);
-    }
-    xTaskCreatePinnedToCore(ao02Task, task_name, 4096, &ch, 1, &ch.task, 1);
-}
-
-Ao02Snapshot snapshotOf(Channel &ch) {
-    Ao02Snapshot snap{};
-    if (ch.mutex == nullptr || xSemaphoreTake(ch.mutex, portMAX_DELAY) != pdTRUE) {
-        return snap;
-    }
-    snap.o2_percent = ch.o2_percent;
-    snap.voltage_mv = ch.voltage_mv;
-    snap.ok = ch.ok;
-    xSemaphoreGive(ch.mutex);
-    return snap;
-}
-
 }  // namespace
 
 void ao02Init() {
-    startChannel(g_hypoxia,
-                 "AO-02 hypoxia",
-                 I2cBusId::Hypoxia,
-                 "ao02Hyp",
-                 O2_HYPOXIA_OFFSET_MV,
-                 O2_HYPOXIA_AIR_MV);
-}
-
-void workingO2Init() {
-    startChannel(g_working,
-                 "AO-02 working",
-                 I2cBusId::Working,
-                 "ao02Work",
-                 O2_WORKING_OFFSET_MV,
-                 O2_WORKING_AIR_MV);
+    g_hypoxia.tag = "AO-02 hypoxia";
+    g_hypoxia.bus = I2cBusId::Hypoxia;
+    g_hypoxia.offset_mv = O2_HYPOXIA_OFFSET_MV;
+    g_hypoxia.air_mv = O2_HYPOXIA_AIR_MV;
+    g_hypoxia.air_percent = O2_AIR_PERCENT;
+    g_hypoxia.mutex = xSemaphoreCreateMutex();
+    g_hypoxia.ads_ready = beginAds(g_hypoxia);
+    if (g_hypoxia.ads_ready) {
+        g_hypoxia.ads.setGain(GAIN_SIXTEEN);
+        logPrintf("%s: ADS1115 init OK (0x%02X)", g_hypoxia.tag, ADS_ADDR);
+    } else {
+        logPrintf("%s: ADS1115 init failed", g_hypoxia.tag);
+    }
+    xTaskCreatePinnedToCore(ao02Task, "ao02Hyp", 4096, &g_hypoxia, 1, &g_hypoxia.task, 1);
 }
 
 Ao02Snapshot ao02GetSnapshot() {
-    return snapshotOf(g_hypoxia);
-}
-
-Ao02Snapshot workingO2GetSnapshot() {
-    return snapshotOf(g_working);
+    Ao02Snapshot snap{};
+    if (g_hypoxia.mutex == nullptr ||
+        xSemaphoreTake(g_hypoxia.mutex, portMAX_DELAY) != pdTRUE) {
+        return snap;
+    }
+    snap.o2_percent = g_hypoxia.o2_percent;
+    snap.voltage_mv = g_hypoxia.voltage_mv;
+    snap.ok = g_hypoxia.ok;
+    xSemaphoreGive(g_hypoxia.mutex);
+    return snap;
 }
